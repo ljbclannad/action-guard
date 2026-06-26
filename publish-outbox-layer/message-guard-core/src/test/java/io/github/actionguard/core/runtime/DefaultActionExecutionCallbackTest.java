@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DefaultActionExecutionCallbackTest {
 
@@ -220,6 +221,74 @@ class DefaultActionExecutionCallbackTest {
         assertThat(updated.lastErrorMessage()).isNull();
     }
 
+    @Test
+    void shouldStopNextStepDispatchWhenActionVersionConflictsAfterStepSuccess() {
+        ConflictActionInstanceRepository actionInstanceRepository = new ConflictActionInstanceRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        CapturingActionExecutionMessageProducer producer = new CapturingActionExecutionMessageProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.NEW, 0, 2, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionStepInstanceRepository.saveAll(List.of(
+                new ActionStepInstance("step-1", "act-1", 0, "send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange", ActionStepStatus.PENDING, 0, Map.of(), null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")),
+                new ActionStepInstance("step-2", "act-1", 1, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(), null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z"))
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T09:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionInstanceRepository.forceNextConflict();
+        DefaultActionExecutionCallback callback = new DefaultActionExecutionCallback(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                new StepHandlerRegistry(List.of(new SuccessHandler("MQ_MESSAGE"))),
+                new RetryCurrentStepPolicy(3),
+                actionOutboxRepository,
+                Optional.of(producer),
+                Clock.fixed(Instant.parse("2026-06-26T09:01:00Z"), ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() -> callback.execute(new ActionExecutionMessage("ACTION_EXECUTE:outbox-1", "ACTION_EXECUTE:act-1", "outbox-1", "act-1", "ACTION_EXECUTE", Instant.parse("2026-06-26T09:00:00Z"))))
+                .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
+        assertThat(producer.published()).isEmpty();
+    }
+
+    @Test
+    void shouldStopRetryDispatchWhenActionVersionConflictsAfterStepFailure() {
+        ConflictActionInstanceRepository actionInstanceRepository = new ConflictActionInstanceRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        CapturingActionExecutionMessageProducer producer = new CapturingActionExecutionMessageProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.NEW, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionStepInstanceRepository.save(new ActionStepInstance(
+                "step-1", "act-1", 0, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(), null, null,
+                0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T09:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionInstanceRepository.forceNextConflict();
+        DefaultActionExecutionCallback callback = new DefaultActionExecutionCallback(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                new StepHandlerRegistry(List.of(new FailingHandler("SMS"))),
+                new RetryCurrentStepPolicy(3),
+                actionOutboxRepository,
+                Optional.of(producer),
+                Clock.fixed(Instant.parse("2026-06-26T09:01:00Z"), ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() -> callback.execute(new ActionExecutionMessage("ACTION_EXECUTE:outbox-1", "ACTION_EXECUTE:act-1", "outbox-1", "act-1", "ACTION_EXECUTE", Instant.parse("2026-06-26T09:00:00Z"))))
+                .isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
+        assertThat(producer.published()).isEmpty();
+    }
+
     private static final class CapturingActionExecutionMessageProducer implements ActionExecutionMessageProducer {
         private final List<ActionOutbox> published = new ArrayList<>();
 
@@ -276,6 +345,23 @@ class DefaultActionExecutionCallbackTest {
                 return StepExecutionResult.failed("DOWNSTREAM_ERROR", "sms provider failed");
             }
             return StepExecutionResult.succeeded();
+        }
+    }
+
+    private static final class ConflictActionInstanceRepository extends InMemoryActionInstanceRepository {
+        private boolean forceNextConflict;
+
+        private void forceNextConflict() {
+            this.forceNextConflict = true;
+        }
+
+        @Override
+        public ActionInstance save(ActionInstance instance) {
+            if (forceNextConflict) {
+                forceNextConflict = false;
+                throw new org.springframework.dao.OptimisticLockingFailureException("forced conflict");
+            }
+            return super.save(instance);
         }
     }
 }

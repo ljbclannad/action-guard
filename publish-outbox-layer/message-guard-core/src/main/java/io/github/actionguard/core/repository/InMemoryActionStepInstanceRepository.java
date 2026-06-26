@@ -1,8 +1,8 @@
 package io.github.actionguard.core.repository;
 
 import io.github.actionguard.core.model.ActionStepInstance;
+import org.springframework.dao.OptimisticLockingFailureException;
 
-import java.util.ConcurrentModificationException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ public class InMemoryActionStepInstanceRepository implements ActionStepInstanceR
                 ? stepInstance
                 : withNextVersion(stepInstance, existing.version());
         if (existing != null && existing.version() != stepInstance.version()) {
-            throw new ConcurrentModificationException("ActionStepInstance version conflict: " + stepInstance.id());
+            throw new OptimisticLockingFailureException("ActionStepInstance version conflict: " + stepInstance.id());
         }
         storageById.put(persisted.id(), persisted);
         return persisted;

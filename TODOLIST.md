@@ -287,10 +287,14 @@
 
 ### P3.2 Fencing 与并发保护
 
-- [ ] 系统化梳理 action / step / outbox / compensation 的 optimistic locking 语义
-- [ ] 为 step 推进补更明确的 fencing token 或 version guard
-- [ ] 为补偿流程补并发保护，避免多个节点重复补偿
-- [ ] 为治理写操作补并发保护，避免 retry / skip / cancel / compensate 冲突
+- [x] 系统化梳理 action / step / outbox / compensation 的 optimistic locking 语义
+- 当前规则：`action_instance`、`action_step_instance`、`action_outbox` 统一使用 `version` 做 optimistic locking fencing，冲突后不允许静默覆盖
+- [x] 为 step 推进补更明确的 fencing token 或 version guard
+- 当前规则：统一使用现有 `version` 字段做 optimistic locking fencing，不额外引入 lease/token 机制
+- [x] 为补偿流程补并发保护，避免多个节点重复补偿
+- 当前规则：补偿进入 `COMPENSATING`、补偿结束进入 `COMPENSATED / DEAD` 时发生版本冲突，当前节点停止整轮补偿
+- [x] 为治理写操作补并发保护，避免 retry / skip / cancel / compensate 冲突
+- 当前规则：治理写操作遇到 optimistic locking 冲突时显式失败，并写失败审计
 
 ### P3.3 幂等与最终一致性
 

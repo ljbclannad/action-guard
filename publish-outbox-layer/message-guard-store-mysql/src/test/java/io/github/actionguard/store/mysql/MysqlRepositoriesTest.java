@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MysqlRepositoriesTest {
 
@@ -142,6 +143,57 @@ class MysqlRepositoriesTest {
         assertThat(repository.findByMessageId(message.messageId()).orElseThrow().consumeStatus())
                 .isEqualTo(ActionConsumeStatus.DUPLICATE_SKIPPED);
         assertThat(repository.findByMessageId(message.messageId()).orElseThrow().attemptCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldRejectStaleActionInstanceUpdate() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        MysqlActionInstanceRepository repository = new MysqlActionInstanceRepository(mapper(ActionInstanceMapper.class), objectMapper);
+        Instant now = Instant.parse("2026-06-26T08:00:00Z");
+        ActionInstance original = new ActionInstance(
+                "act-stale",
+                "order-cancel-flow",
+                "order:stale",
+                ActionStatus.NEW,
+                0,
+                1,
+                Map.of(),
+                null,
+                null,
+                0,
+                now,
+                now
+        );
+        repository.save(original);
+        repository.save(new ActionInstance(
+                "act-stale",
+                "order-cancel-flow",
+                "order:stale",
+                ActionStatus.DISPATCHING,
+                0,
+                1,
+                Map.of(),
+                null,
+                null,
+                0,
+                now,
+                now.plusSeconds(1)
+        ));
+
+        assertThatThrownBy(() -> repository.save(new ActionInstance(
+                "act-stale",
+                "order-cancel-flow",
+                "order:stale",
+                ActionStatus.SUCCESS,
+                1,
+                1,
+                Map.of(),
+                null,
+                null,
+                0,
+                now,
+                now.plusSeconds(2)
+        ))).isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
     }
 
     private <T> T mapper(Class<T> mapperType) {

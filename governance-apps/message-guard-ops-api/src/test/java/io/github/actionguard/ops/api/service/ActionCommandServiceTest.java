@@ -15,6 +15,7 @@ import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
 import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
 import io.github.actionguard.ops.api.repository.jdbc.InMemoryAuditLogRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -188,6 +189,34 @@ class ActionCommandServiceTest {
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
     }
 
+    @Test
+    void shouldAuditFailedCancelWhenVersionConflictOccurs() {
+        ConflictActionInstanceRepository actionInstanceRepository = new ConflictActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.DISPATCHING, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        actionInstanceRepository.forceNextConflict();
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                new NoOpCompensationService()
+        );
+
+        assertThatThrownBy(() -> service.cancel("act-1", "anonymous"))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("FAILED");
+    }
+
     private static final class CapturingProducer implements ActionExecutionMessageProducer {
         private final List<ActionOutbox> published = new ArrayList<>();
 
@@ -226,6 +255,23 @@ class ActionCommandServiceTest {
 
         @Override
         public void compensate(String actionInstanceId) {
+        }
+    }
+
+    private static final class ConflictActionInstanceRepository extends InMemoryActionInstanceRepository {
+        private boolean forceNextConflict;
+
+        private void forceNextConflict() {
+            this.forceNextConflict = true;
+        }
+
+        @Override
+        public ActionInstance save(ActionInstance instance) {
+            if (forceNextConflict) {
+                forceNextConflict = false;
+                throw new OptimisticLockingFailureException("forced conflict");
+            }
+            return super.save(instance);
         }
     }
 }

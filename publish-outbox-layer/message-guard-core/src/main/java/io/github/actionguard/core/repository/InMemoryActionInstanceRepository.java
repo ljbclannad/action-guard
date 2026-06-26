@@ -1,8 +1,8 @@
 package io.github.actionguard.core.repository;
 
 import io.github.actionguard.core.model.ActionInstance;
+import org.springframework.dao.OptimisticLockingFailureException;
 
-import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +29,7 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
                 ? instance
                 : withNextVersion(instance, existing.version());
         if (existing != null && existing.version() != instance.version()) {
-            throw new ConcurrentModificationException("ActionInstance version conflict: " + instance.id());
+            throw new OptimisticLockingFailureException("ActionInstance version conflict: " + instance.id());
         }
         storageByBusinessKey.put(key(persisted.actionName(), persisted.bizKey()), persisted);
         storageById.put(persisted.id(), persisted);

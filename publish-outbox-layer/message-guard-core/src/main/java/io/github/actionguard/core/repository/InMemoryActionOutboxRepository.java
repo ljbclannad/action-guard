@@ -1,8 +1,8 @@
 package io.github.actionguard.core.repository;
 
 import io.github.actionguard.core.model.ActionOutbox;
+import org.springframework.dao.OptimisticLockingFailureException;
 
-import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,7 +16,7 @@ public class InMemoryActionOutboxRepository implements ActionOutboxRepository {
         ActionOutbox existing = storage.get(outbox.id());
         ActionOutbox persisted = existing == null ? outbox : withNextVersion(outbox, existing.version());
         if (existing != null && existing.version() != outbox.version()) {
-            throw new ConcurrentModificationException("ActionOutbox version conflict: " + outbox.id());
+            throw new OptimisticLockingFailureException("ActionOutbox version conflict: " + outbox.id());
         }
         storage.put(persisted.id(), persisted);
         return persisted;

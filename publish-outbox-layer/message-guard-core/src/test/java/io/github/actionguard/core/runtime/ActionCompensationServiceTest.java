@@ -15,6 +15,7 @@ import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -237,6 +238,37 @@ class ActionCompensationServiceTest {
                 .containsExactly("SUCCESS", "SUCCESS");
     }
 
+    @Test
+    void shouldStopCompensationWhenActionVersionConflictsBeforeCompensating() {
+        ConflictActionInstanceRepository actionInstanceRepository = new ConflictActionInstanceRepository();
+        InMemoryActionStepInstanceRepository stepRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionGovernancePolicyRepository policyRepository = new InMemoryActionGovernancePolicyRepository();
+        InMemoryActionCompensationLogRepository compensationLogRepository = new InMemoryActionCompensationLogRepository();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.FAILED, 1, 2, Map.of(),
+                "DOWNSTREAM_ERROR", "failed", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        stepRepository.saveAll(successSteps());
+        policyRepository.save(new ActionGovernancePolicy(
+                "policy-1", "order-cancel-flow", Boolean.TRUE, null, null, Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        actionInstanceRepository.forceNextConflict();
+
+        ActionCompensationService service = new ActionCompensationService(
+                actionInstanceRepository,
+                stepRepository,
+                new FixedDefinitionRegistry(false),
+                policyRepository,
+                compensationLogRepository,
+                new ActionCompensatorRegistry(List.of(new CapturingCompensator("MQ_MESSAGE"), new CapturingCompensator("SMS"))),
+                Clock.fixed(Instant.parse("2026-06-26T12:01:00Z"), ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() -> service.compensate("act-1"))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+        assertThat(compensationLogRepository.findByActionInstanceId("act-1")).isEmpty();
+    }
+
     private List<ActionStepInstance> successSteps() {
         Instant now = Instant.parse("2026-06-26T12:00:00Z");
         return List.of(
@@ -296,6 +328,23 @@ class ActionCompensationServiceTest {
         @Override
         public List<ActionCompensationLog> findByActionInstanceId(String actionInstanceId) {
             return storage.stream().filter(log -> log.actionInstanceId().equals(actionInstanceId)).toList();
+        }
+    }
+
+    private static final class ConflictActionInstanceRepository extends InMemoryActionInstanceRepository {
+        private boolean forceNextConflict;
+
+        private void forceNextConflict() {
+            this.forceNextConflict = true;
+        }
+
+        @Override
+        public ActionInstance save(ActionInstance instance) {
+            if (forceNextConflict) {
+                forceNextConflict = false;
+                throw new OptimisticLockingFailureException("forced conflict");
+            }
+            return super.save(instance);
         }
     }
 

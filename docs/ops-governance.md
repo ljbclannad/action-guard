@@ -30,6 +30,7 @@ Current boundaries:
 - compensation execution is controlled by an action-level switch resolved from YAML default plus database override
 - compensation execution writes step-level durable compensation logs
 - skip is implemented with a minimal semantic: current step is moved into a stable success state and the audit log distinguishes operator skip from real execution success
+- action, step, and outbox writes now share a unified optimistic-locking-based fencing rule via `version`
 - permissions are not implemented in the current project phase
 
 ## Governance Goals
@@ -191,6 +192,7 @@ Current implementation notes:
 - explicit reason fields are not yet enforced
 - non-skippable step markers are not yet implemented
 - compensation is additionally guarded by an action-level governance switch
+- governance write conflicts are surfaced explicitly rather than retried silently
 
 ## Alerting
 
@@ -277,6 +279,28 @@ Current compensation behavior:
 - enabled switch + successful reverse compensation: success + audit
 - enabled switch + compensation failure: failure + audit
 - `SKIPPED / SUCCESS / FAILED` compensation step results are written to a dedicated compensation log table
+- compensation state transitions are protected by optimistic locking; on conflict, the current node stops compensation and does not continue the batch
+
+## Concurrency And Fencing
+
+Current fencing rule:
+
+- `action_instance`
+- `action_step_instance`
+- `action_outbox`
+
+all use existing `version` fields as optimistic-locking guards.
+
+Current conflict handling:
+
+- runtime forward progression conflict:
+  stop current progression and do not continue dispatch
+- runtime retry progression conflict:
+  stop current retry dispatch
+- compensation progression conflict:
+  stop the current compensation run
+- governance write conflict:
+  return explicit failure and write failed audit
 
 ## SLO And Monitoring
 

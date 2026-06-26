@@ -45,78 +45,93 @@ public class ActionCommandService {
     }
 
     public void retry(String actionInstanceId, String operator) {
-        ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
-                .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
-        validator.validateRetry(actionInstance.status());
-        ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
-                .orElseThrow(() -> new IllegalStateException("Outbox not found for action: " + actionInstanceId));
-        producer.orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available")).publish(outbox);
-        auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry dispatched");
+        try {
+            ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
+                    .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
+            validator.validateRetry(actionInstance.status());
+            ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
+                    .orElseThrow(() -> new IllegalStateException("Outbox not found for action: " + actionInstanceId));
+            producer.orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available")).publish(outbox);
+            auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry dispatched");
+        } catch (RuntimeException ex) {
+            auditService.record(actionInstanceId, "RETRY", operator, "{}", "FAILED", ex.getMessage());
+            throw ex;
+        }
     }
 
     public void cancel(String actionInstanceId, String operator) {
-        ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
-                .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
-        validator.validateCancel(actionInstance.status());
-        actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                ActionStatus.IGNORED,
-                actionInstance.currentStepIndex(),
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                actionInstance.lastErrorCode(),
-                actionInstance.lastErrorMessage(),
-                actionInstance.version(),
-                actionInstance.createdAt(),
-                Instant.now()
-        ));
-        auditService.record(actionInstanceId, "CANCEL", operator, "{}", "SUCCESS", "action ignored");
+        try {
+            ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
+                    .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
+            validator.validateCancel(actionInstance.status());
+            actionInstanceRepository.save(new ActionInstance(
+                    actionInstance.id(),
+                    actionInstance.actionName(),
+                    actionInstance.bizKey(),
+                    ActionStatus.IGNORED,
+                    actionInstance.currentStepIndex(),
+                    actionInstance.totalStepCount(),
+                    actionInstance.attributes(),
+                    actionInstance.lastErrorCode(),
+                    actionInstance.lastErrorMessage(),
+                    actionInstance.version(),
+                    actionInstance.createdAt(),
+                    Instant.now()
+            ));
+            auditService.record(actionInstanceId, "CANCEL", operator, "{}", "SUCCESS", "action ignored");
+        } catch (RuntimeException ex) {
+            auditService.record(actionInstanceId, "CANCEL", operator, "{}", "FAILED", ex.getMessage());
+            throw ex;
+        }
     }
 
     public void skip(String actionInstanceId, String operator) {
-        ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
-                .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
-        validator.validateSkip(actionInstance.status());
-        List<ActionStepInstance> steps = actionStepInstanceRepository.findByActionInstanceId(actionInstanceId);
-        if (actionInstance.currentStepIndex() >= steps.size()) {
-            throw new IllegalStateException("No current step to skip for action: " + actionInstanceId);
+        try {
+            ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
+                    .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
+            validator.validateSkip(actionInstance.status());
+            List<ActionStepInstance> steps = actionStepInstanceRepository.findByActionInstanceId(actionInstanceId);
+            if (actionInstance.currentStepIndex() >= steps.size()) {
+                throw new IllegalStateException("No current step to skip for action: " + actionInstanceId);
+            }
+            ActionStepInstance currentStep = steps.get(actionInstance.currentStepIndex());
+            actionStepInstanceRepository.save(new ActionStepInstance(
+                    currentStep.id(),
+                    currentStep.actionInstanceId(),
+                    currentStep.stepIndex(),
+                    currentStep.stepName(),
+                    currentStep.stepType(),
+                    currentStep.target(),
+                    ActionStepStatus.SUCCESS,
+                    currentStep.attemptCount(),
+                    currentStep.payload(),
+                    currentStep.lastErrorCode(),
+                    currentStep.lastErrorMessage(),
+                    currentStep.version(),
+                    currentStep.createdAt(),
+                    Instant.now()
+            ));
+            int nextStepIndex = currentStep.stepIndex() + 1;
+            ActionStatus nextStatus = nextStepIndex >= actionInstance.totalStepCount() ? ActionStatus.SUCCESS : ActionStatus.DISPATCHING;
+            actionInstanceRepository.save(new ActionInstance(
+                    actionInstance.id(),
+                    actionInstance.actionName(),
+                    actionInstance.bizKey(),
+                    nextStatus,
+                    nextStepIndex,
+                    actionInstance.totalStepCount(),
+                    actionInstance.attributes(),
+                    actionInstance.lastErrorCode(),
+                    actionInstance.lastErrorMessage(),
+                    actionInstance.version(),
+                    actionInstance.createdAt(),
+                    Instant.now()
+            ));
+            auditService.record(actionInstanceId, "SKIP", operator, "{}", "SUCCESS", "current step skipped");
+        } catch (RuntimeException ex) {
+            auditService.record(actionInstanceId, "SKIP", operator, "{}", "FAILED", ex.getMessage());
+            throw ex;
         }
-        ActionStepInstance currentStep = steps.get(actionInstance.currentStepIndex());
-        actionStepInstanceRepository.save(new ActionStepInstance(
-                currentStep.id(),
-                currentStep.actionInstanceId(),
-                currentStep.stepIndex(),
-                currentStep.stepName(),
-                currentStep.stepType(),
-                currentStep.target(),
-                ActionStepStatus.SUCCESS,
-                currentStep.attemptCount(),
-                currentStep.payload(),
-                currentStep.lastErrorCode(),
-                currentStep.lastErrorMessage(),
-                currentStep.version(),
-                currentStep.createdAt(),
-                Instant.now()
-        ));
-        int nextStepIndex = currentStep.stepIndex() + 1;
-        ActionStatus nextStatus = nextStepIndex >= actionInstance.totalStepCount() ? ActionStatus.SUCCESS : ActionStatus.DISPATCHING;
-        actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                nextStatus,
-                nextStepIndex,
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                actionInstance.lastErrorCode(),
-                actionInstance.lastErrorMessage(),
-                actionInstance.version(),
-                actionInstance.createdAt(),
-                Instant.now()
-        ));
-        auditService.record(actionInstanceId, "SKIP", operator, "{}", "SUCCESS", "current step skipped");
     }
 
     public void compensate(String actionInstanceId, String operator) {
