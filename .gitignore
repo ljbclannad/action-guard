@@ -1,0 +1,6 @@
+target/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+docs/CLAUDE.local.md
