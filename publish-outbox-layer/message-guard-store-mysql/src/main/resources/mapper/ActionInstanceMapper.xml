@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.actionguard.store.mysql.mapper.ActionInstanceMapper">
+
+    <select id="selectById" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        select id,
+               action_name as actionName,
+               biz_key as bizKey,
+               status,
+               current_step_index as currentStepIndex,
+               total_step_count as totalStepCount,
+               attributes_json as attributesJson,
+               last_error_code as lastErrorCode,
+               last_error_message as lastErrorMessage,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_instance
+        where id = #{id}
+    </select>
+
+    <select id="selectByActionNameAndBizKey" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        select id,
+               action_name as actionName,
+               biz_key as bizKey,
+               status,
+               current_step_index as currentStepIndex,
+               total_step_count as totalStepCount,
+               attributes_json as attributesJson,
+               last_error_code as lastErrorCode,
+               last_error_message as lastErrorMessage,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_instance
+        where action_name = #{actionName}
+          and biz_key = #{bizKey}
+        order by created_at desc
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        insert into action_instance (
+            id, action_name, biz_key, status, current_step_index, total_step_count, attributes_json,
+            last_error_code, last_error_message, version, created_at, updated_at
+        ) values (
+            #{id}, #{actionName}, #{bizKey}, #{status}, #{currentStepIndex}, #{totalStepCount}, #{attributesJson},
+            #{lastErrorCode}, #{lastErrorMessage}, #{version}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        update action_instance
+        set status = #{status},
+            current_step_index = #{currentStepIndex},
+            total_step_count = #{totalStepCount},
+            attributes_json = #{attributesJson},
+            last_error_code = #{lastErrorCode},
+            last_error_message = #{lastErrorMessage},
+            version = version + 1,
+            updated_at = #{updatedAt}
+        where id = #{id}
+          and version = #{version}
+    </update>
+
+</mapper>

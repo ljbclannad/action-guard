@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.actionguard.store.mysql.mapper.ActionOutboxMapper">
+
+    <select id="selectById" resultType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
+        select id,
+               action_instance_id as actionInstanceId,
+               topic,
+               status,
+               available_at as availableAt,
+               attempt_count as attemptCount,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_outbox
+        where id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
+        insert into action_outbox (
+            id, action_instance_id, topic, status, available_at, attempt_count, version, created_at, updated_at
+        ) values (
+            #{id}, #{actionInstanceId}, #{topic}, #{status}, #{availableAt}, #{attemptCount}, #{version}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
+        update action_outbox
+        set topic = #{topic},
+            status = #{status},
+            available_at = #{availableAt},
+            attempt_count = #{attemptCount},
+            version = version + 1,
+            updated_at = #{updatedAt}
+        where id = #{id}
+          and version = #{version}
+    </update>
+
+    <select id="selectByActionInstanceId" resultType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
+        select id,
+               action_instance_id as actionInstanceId,
+               topic,
+               status,
+               available_at as availableAt,
+               attempt_count as attemptCount,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_outbox
+        where action_instance_id = #{actionInstanceId}
+        order by created_at asc
+        limit 1
+    </select>
+
+</mapper>

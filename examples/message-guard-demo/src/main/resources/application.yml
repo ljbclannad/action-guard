@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DEMO_MYSQL_HOST:localhost}:${DEMO_MYSQL_PORT:3306}/${DEMO_MYSQL_DATABASE:action_guard_demo}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: ${DEMO_MYSQL_USERNAME:root}
+    password: ${DEMO_MYSQL_PASSWORD:root}
+    hikari:
+      pool-name: action-guard-demo-hikari
+      minimum-idle: ${DEMO_MYSQL_POOL_MIN_IDLE:2}
+      maximum-pool-size: ${DEMO_MYSQL_POOL_MAX_SIZE:10}
+      idle-timeout: ${DEMO_MYSQL_POOL_IDLE_TIMEOUT_MS:300000}
+      max-lifetime: ${DEMO_MYSQL_POOL_MAX_LIFETIME_MS:1800000}
+      connection-timeout: ${DEMO_MYSQL_POOL_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DEMO_MYSQL_POOL_VALIDATION_TIMEOUT_MS:5000}
+      auto-commit: true
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      schema-locations: classpath:db/action-guard-mysql-schema.sql
+  rabbitmq:
+    host: ${DEMO_RABBITMQ_HOST:localhost}
+    port: ${DEMO_RABBITMQ_PORT:5672}
+    username: ${DEMO_RABBITMQ_USERNAME:guest}
+    password: ${DEMO_RABBITMQ_PASSWORD:guest}
+
+action:
+  guard:
+    definition-locations:
+      - classpath*:actions/*.yml
+    rabbitmq:
+      exchange: action.guard.execute
+      routing-key-prefix: action.execute
+      queue: action.guard.execute.queue
+      consumer-group: action-guard-demo

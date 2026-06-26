@@ -5,5 +5,7 @@ import io.github.actionguard.api.runtime.ActionCompensationResult;
 
 public interface ActionCompensator {
 
+    String stepType();
+
     ActionCompensationResult compensate(ActionCompensationContext context);
 }

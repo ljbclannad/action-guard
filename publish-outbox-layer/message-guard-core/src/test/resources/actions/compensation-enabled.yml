@@ -1,0 +1,7 @@
+name: compensate-order-cancel
+description: compensation-enabled demo action
+compensationEnabled: true
+steps:
+  - name: send-cancel-event
+    stepType: MQ_MESSAGE
+    target: order.cancel.exchange

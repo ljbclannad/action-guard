@@ -6,6 +6,32 @@ Governance is a core framework capability, not an optional admin UI.
 
 If asynchronous side effects can fail, repeat, compensate, or stall, operators need durable visibility and bounded control.
 
+## Current Status
+
+The governance layer now has a real backend API in `message-guard-ops-api` for:
+
+- action list query
+- action detail query
+- step detail query
+- consume detail query
+- audit log query
+- manual retry
+- skip current step
+- cancel action
+- compensate entrypoint
+
+This does **not** mean all governance semantics are fully mature.
+
+Current boundaries:
+
+- query APIs return real data from MySQL-backed runtime tables
+- write operations write durable governance audit logs
+- compensation entry is wired to a real compensation runtime path
+- compensation execution is controlled by an action-level switch resolved from YAML default plus database override
+- compensation execution writes step-level durable compensation logs
+- skip is implemented with a minimal semantic: current step is moved into a stable success state and the audit log distinguishes operator skip from real execution success
+- permissions are not implemented in the current project phase
+
 ## Governance Goals
 
 - make every action instance observable
@@ -17,7 +43,9 @@ If asynchronous side effects can fail, repeat, compensate, or stall, operators n
 
 ## Primary Views
 
-The ops layer should provide these first-version views:
+The ops layer should provide these first-version views.
+
+These views are now implemented at API level in `message-guard-ops-api`.
 
 ### Action List
 
@@ -28,9 +56,10 @@ Fields:
 - biz key
 - status
 - current step
-- next run time
 - created time
 - updated time
+- last error code
+- last error message
 
 Common filters:
 
@@ -38,21 +67,28 @@ Common filters:
 - action name
 - biz key
 - creation time range
-- waiting manual only
-- compensation related only
+
+Current implementation notes:
+
+- pagination is supported
+- basic filters are supported
+- "waiting manual only" is not currently implemented because the runtime state model does not yet expose a dedicated waiting-manual terminal path
 
 ### Action Detail
 
 Fields:
 
-- resolved definition version
-- attributes snapshot
+- action base fields
 - current failure reason
-- current retry state
-- compensation state
-- outbox state
-- full step timeline
-- audit timeline
+- step summary list
+- consume summary list
+
+Current implementation notes:
+
+- resolved definition version is not currently exposed
+- outbox state is not currently included in the detail response
+- audit timeline is queried through a separate audit log endpoint
+- compensation timeline is queried through a separate compensation log endpoint
 
 ### Step Detail
 
@@ -61,11 +97,11 @@ Fields:
 - step name and type
 - target
 - attempt count
-- timeout
-- retry policy
-- last request and response snapshot
 - last error code and message
-- compensation history
+
+Current implementation notes:
+
+- timeout, retry policy, request/response snapshot, and compensation history are not yet exposed in the current response model
 
 ### Message Consumption Detail
 
@@ -74,14 +110,17 @@ Fields:
 - message id
 - consumer group
 - consume status
-- delivery count
-- duplicate skipped or not
+- attempt count
 - last consume failure reason
-- dead-letter state if any
 
-## Standard Operator Actions
+Current implementation notes:
 
-The first version should define a small but strict set of actions.
+- attempt count is the currently exposed proxy for delivery count
+- dedicated dead-letter state exposure is not yet modeled separately in the governance response
+
+## Current Operator Actions
+
+The current API exposes a small but strict set of operator actions.
 
 ### Manual Retry
 
@@ -89,9 +128,9 @@ Use when the underlying problem is believed resolved.
 
 Rules:
 
-- allowed from `WAITING_MANUAL`, `FAILED`, or compensation-failed states
-- increments an operator-triggered retry counter or writes an audit event
-- resets the next executable state to dispatchable
+- allowed from `FAILED` or `RETRYING`
+- writes a durable audit event
+- reuses the existing current-step dispatch path
 
 ### Skip Current Step
 
@@ -99,9 +138,10 @@ Use only when business owners accept omission of the side effect.
 
 Rules:
 
-- must require reason input
-- should be disabled for steps marked non-skippable
-- writes an audit record and advances to the next step
+- currently does not require explicit reason input in the API contract
+- current project phase does not support non-skippable step metadata
+- writes an audit record and advances to the next step or `SUCCESS`
+- current implementation marks the skipped step into a stable success state and relies on audit logs to preserve the operator-skip meaning
 
 ### Cancel Action
 
@@ -110,8 +150,8 @@ Stops further automatic execution.
 Rules:
 
 - allowed only for non-terminal actions
-- must not pretend already completed side effects were undone
-- may optionally trigger compensation if configured and approved
+- does not pretend already completed side effects were undone
+- currently moves the action to `IGNORED`
 
 ### Trigger Compensation
 
@@ -119,9 +159,17 @@ Starts reverse handling for already successful prior steps.
 
 Rules:
 
-- must run in reverse successful-step order
-- should require explicit confirmation when invoked manually
-- writes durable audit records for each compensation attempt
+- current implementation validates action status and records durable audit
+- effective compensation enablement is resolved as: database override by `actionName` wins, otherwise fallback to YAML `compensationEnabled`
+- YAML `compensationEnabled` default is currently `false`
+- only `FAILED` and `DEAD` may enter compensation
+- compensation runs only against already successful steps
+- successful steps are compensated in reverse `stepIndex` order
+- if no compensator is registered for a successful step, that step is skipped and compensation continues
+- if any compensator fails, the action moves to `DEAD`
+- if all compensations succeed or are skippable, the action moves to `COMPENSATED`
+- one compensation run produces one `compensation_batch_id`
+- each processed successful step writes one compensation log row
 
 ### Reopen Waiting Manual
 
@@ -134,10 +182,15 @@ Governance APIs must enforce safety, not just rely on UI warnings.
 Recommended controls:
 
 - optimistic version check on operator mutations
-- role-based permission boundaries
-- explicit reason fields for destructive actions
 - action-level and step-level terminal-state guards
-- non-skippable step markers
+
+Current implementation notes:
+
+- action-level state validation is implemented
+- permission boundaries are intentionally not implemented in the current project phase
+- explicit reason fields are not yet enforced
+- non-skippable step markers are not yet implemented
+- compensation is additionally guarded by an action-level governance switch
 
 ## Alerting
 
@@ -164,6 +217,10 @@ Recommended alert payload:
 - last error summary
 - ops deep link if available
 
+Current implementation notes:
+
+- alerting integration is not implemented yet
+
 ## Audit Requirements
 
 Every operator action must create an immutable audit event.
@@ -177,21 +234,49 @@ Required audit context:
 - what state changed
 - why the operator performed it
 
+Current implementation notes:
+
+- durable audit persistence is implemented through `action_ops_audit_log`
+- current stored fields include action id, operation type, operator, request payload snapshot, result status, result message, and created time
+- `operator` currently comes from optional request header `X-Action-Guard-Operator`, defaulting to `anonymous`
+- compensate success and failure are both audited through the same governance audit pipeline
+
 ## Governance API Surface
 
-Suggested first-version API categories:
+Current API categories:
 
 - list actions
 - query action detail
-- query step detail
-- query message consume detail
+- query step detail list
+- query message consume detail list
 - manual retry
 - skip step
 - cancel action
 - trigger compensation
+- query compensation logs
 - list audit logs
 
-The API contract should be state-aware and return clear rejection reasons for invalid transitions.
+The API contract is state-aware and returns clear rejection failures for invalid transitions or disabled capabilities.
+
+Current endpoint groups:
+
+- `GET /api/actions`
+- `GET /api/actions/{actionInstanceId}`
+- `GET /api/actions/{actionInstanceId}/steps`
+- `GET /api/actions/{actionInstanceId}/consumes`
+- `GET /api/actions/{actionInstanceId}/compensations`
+- `GET /api/audit-logs`
+- `POST /api/actions/{actionInstanceId}/retry`
+- `POST /api/actions/{actionInstanceId}/skip`
+- `POST /api/actions/{actionInstanceId}/cancel`
+- `POST /api/actions/{actionInstanceId}/compensate`
+
+Current compensation behavior:
+
+- disabled switch: explicit failure + audit
+- enabled switch + successful reverse compensation: success + audit
+- enabled switch + compensation failure: failure + audit
+- `SKIPPED / SUCCESS / FAILED` compensation step results are written to a dedicated compensation log table
 
 ## SLO And Monitoring
 
@@ -226,21 +311,38 @@ Recommended dashboards:
 
 Reasonable first-version defaults:
 
-- retries exhausted moves action to `WAITING_MANUAL` unless policy says start compensation
-- skipping a step requires operator reason
-- compensation failure always triggers `P1` or `P2` alert
-- terminal actions cannot be mutated except by explicit governance transitions defined by policy
+- retries exhausted currently move action to `FAILED`
+- skipping a step currently does not require operator reason
+- compensation failure alerting is not implemented yet
+- terminal actions cannot be mutated except by governance transitions explicitly allowed by current validation logic
+- compensation is disabled by default unless YAML enables it or database policy overrides it to enabled
 
-## Definition-Time Governance Hooks
+## Governance Persistence
 
-The DSL should allow selected governance hints:
+Current governance persistence uses:
 
-- step skippable or not
-- alert severity overrides
-- compensation required or optional
-- manual intervention policy after retries exhausted
+- runtime tables:
+  - `action_instance`
+  - `action_step_instance`
+  - `action_outbox`
+  - `action_consume_log`
+- governance audit table:
+  - `action_ops_audit_log`
+- governance policy table:
+  - `action_governance_policy`
+- compensation log table:
+  - `action_compensation_log`
 
-This keeps runtime operations predictable while still allowing business-specific policy differences.
+Compensation log semantics:
+
+- one compensation run creates one `compensation_batch_id`
+- one processed successful historical step creates one log row in that batch
+- current compensation statuses are:
+  - `SKIPPED`
+  - `SUCCESS`
+  - `FAILED`
+
+This allows governance queries and write-audit persistence to share the same MySQL store as the runtime prototype.
 
 ## Boundaries
 

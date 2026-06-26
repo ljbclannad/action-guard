@@ -5,6 +5,7 @@ import io.github.actionguard.api.definition.ActionStepDefinition;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
+import java.net.URL;
 import java.util.List;
 import java.util.Map;
 
@@ -14,7 +15,7 @@ public class YamlActionDefinitionLoader implements ActionDefinitionLoader {
     @SuppressWarnings("unchecked")
     public ActionDefinition load(String location) {
         Yaml yaml = new Yaml();
-        try (InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(location)) {
+        try (InputStream stream = openStream(location)) {
             if (stream == null) {
                 throw new IllegalArgumentException("Action definition not found: " + location);
             }
@@ -30,10 +31,19 @@ public class YamlActionDefinitionLoader implements ActionDefinitionLoader {
             return new ActionDefinition(
                     String.valueOf(raw.get("name")),
                     String.valueOf(raw.get("description")),
+                    raw.get("compensationEnabled") instanceof Boolean enabled ? enabled : false,
                     definitions
             );
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to load action definition: " + location, ex);
         }
+    }
+
+    private InputStream openStream(String location) throws Exception {
+        InputStream classpathStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(location);
+        if (classpathStream != null) {
+            return classpathStream;
+        }
+        return new URL(location).openStream();
     }
 }

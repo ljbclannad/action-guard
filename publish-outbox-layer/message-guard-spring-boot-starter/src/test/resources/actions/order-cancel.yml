@@ -1,0 +1,9 @@
+name: order-cancel-flow
+description: order cancel flow
+steps:
+  - name: send-cancel-event
+    stepType: MQ_MESSAGE
+    target: order.cancel.exchange
+  - name: send-user-sms
+    stepType: SMS
+    target: notify.user

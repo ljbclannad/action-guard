@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.actionguard.store.mysql.mapper.ActionStepInstanceMapper">
+
+    <select id="selectById" resultType="io.github.actionguard.store.mysql.mapper.ActionStepInstanceRow">
+        select id,
+               action_instance_id as actionInstanceId,
+               step_index as stepIndex,
+               step_name as stepName,
+               step_type as stepType,
+               target,
+               status,
+               attempt_count as attemptCount,
+               payload_json as payloadJson,
+               last_error_code as lastErrorCode,
+               last_error_message as lastErrorMessage,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_step_instance
+        where id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionStepInstanceRow">
+        insert into action_step_instance (
+            id, action_instance_id, step_index, step_name, step_type, target, status, attempt_count, payload_json,
+            last_error_code, last_error_message, version, created_at, updated_at
+        ) values (
+            #{id}, #{actionInstanceId}, #{stepIndex}, #{stepName}, #{stepType}, #{target}, #{status}, #{attemptCount}, #{payloadJson},
+            #{lastErrorCode}, #{lastErrorMessage}, #{version}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionStepInstanceRow">
+        update action_step_instance
+        set status = #{status},
+            attempt_count = #{attemptCount},
+            payload_json = #{payloadJson},
+            last_error_code = #{lastErrorCode},
+            last_error_message = #{lastErrorMessage},
+            version = version + 1,
+            updated_at = #{updatedAt}
+        where id = #{id}
+          and version = #{version}
+    </update>
+
+    <select id="selectByActionInstanceId" resultType="io.github.actionguard.store.mysql.mapper.ActionStepInstanceRow">
+        select id,
+               action_instance_id as actionInstanceId,
+               step_index as stepIndex,
+               step_name as stepName,
+               step_type as stepType,
+               target,
+               status,
+               attempt_count as attemptCount,
+               payload_json as payloadJson,
+               last_error_code as lastErrorCode,
+               last_error_message as lastErrorMessage,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_step_instance
+        where action_instance_id = #{actionInstanceId}
+        order by step_index asc
+    </select>
+
+</mapper>

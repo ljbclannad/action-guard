@@ -1,0 +1,6 @@
+name: demo-notify-success
+description: one-step success demo
+steps:
+  - name: send-user-sms
+    stepType: SMS
+    target: notify.user

@@ -4,3 +4,6 @@ target/
 *.iml
 .DS_Store
 docs/CLAUDE.local.md
+docs/superpowers/
+docs/plans/
+

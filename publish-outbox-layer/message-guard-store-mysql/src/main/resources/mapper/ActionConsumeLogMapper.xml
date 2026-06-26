@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.actionguard.store.mysql.mapper.ActionConsumeLogMapper">
+
+    <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionConsumeLogRow">
+        insert into action_consume_log (
+            id, message_id, action_instance_id, consumer_group, consume_status, dedupe_key, attempt_count,
+            last_error_message, version, first_received_at, last_received_at, updated_at
+        ) values (
+            #{id}, #{messageId}, #{actionInstanceId}, #{consumerGroup}, #{consumeStatus}, #{dedupeKey}, #{attemptCount},
+            #{lastErrorMessage}, #{version}, #{firstReceivedAt}, #{lastReceivedAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="selectByMessageId" resultType="io.github.actionguard.store.mysql.mapper.ActionConsumeLogRow">
+        select id,
+               message_id as messageId,
+               action_instance_id as actionInstanceId,
+               consumer_group as consumerGroup,
+               consume_status as consumeStatus,
+               dedupe_key as dedupeKey,
+               attempt_count as attemptCount,
+               last_error_message as lastErrorMessage,
+               version,
+               first_received_at as firstReceivedAt,
+               last_received_at as lastReceivedAt,
+               updated_at as updatedAt
+        from action_consume_log
+        where message_id = #{messageId}
+    </select>
+
+    <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionConsumeLogRow">
+        update action_consume_log
+        set consumer_group = #{consumerGroup},
+            consume_status = #{consumeStatus},
+            attempt_count = #{attemptCount},
+            last_error_message = #{lastErrorMessage},
+            version = version + 1,
+            last_received_at = #{lastReceivedAt},
+            updated_at = #{updatedAt}
+        where id = #{id}
+          and version = #{version}
+    </update>
+
+</mapper>
