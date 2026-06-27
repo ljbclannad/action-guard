@@ -33,4 +33,29 @@ class InMemoryActionConsumeLogRepositoryTest {
                 .isEqualTo(ActionConsumeStatus.DUPLICATE_SKIPPED);
         assertThat(repository.findByMessageId(message.messageId()).orElseThrow().attemptCount()).isEqualTo(2);
     }
+
+    @Test
+    void shouldAllowRetryConsumptionAfterPreviousFailure() {
+        InMemoryActionConsumeLogRepository repository = new InMemoryActionConsumeLogRepository();
+        ActionExecutionMessage message = new ActionExecutionMessage(
+                "ACTION_EXECUTE:outbox-2",
+                "ACTION_EXECUTE:action-2",
+                "outbox-2",
+                "action-2",
+                "ACTION_EXECUTE",
+                Instant.parse("2026-06-26T08:40:00Z")
+        );
+        Instant now = Instant.parse("2026-06-26T08:41:00Z");
+
+        assertThat(repository.tryStartConsumption(message, "rabbitmq-main", now)).isTrue();
+        repository.markFailed(message.messageId(), "rabbitmq-main", now.plusSeconds(1), "callback failed");
+
+        assertThat(repository.tryStartConsumption(message, "rabbitmq-main", now.plusSeconds(2))).isTrue();
+        repository.markAcked(message.messageId(), "rabbitmq-main", now.plusSeconds(3));
+
+        assertThat(repository.findByMessageId(message.messageId())).isPresent();
+        assertThat(repository.findByMessageId(message.messageId()).orElseThrow().consumeStatus())
+                .isEqualTo(ActionConsumeStatus.ACKED);
+        assertThat(repository.findByMessageId(message.messageId()).orElseThrow().attemptCount()).isEqualTo(2);
+    }
 }

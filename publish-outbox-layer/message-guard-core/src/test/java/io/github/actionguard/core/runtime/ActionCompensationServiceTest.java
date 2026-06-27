@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -245,6 +246,59 @@ class ActionCompensationServiceTest {
                 .containsExactly("SUCCESS", "SUCCESS");
         assertThat(metricsRecorder.counters)
                 .containsEntry("action.guard.action.compensated|{actionName=order-cancel-flow, result=compensated, stepType=unknown}", 1L);
+    }
+
+    @Test
+    void shouldResumeInterruptedCompensationWithoutRepeatingCompletedStep() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionStepInstanceRepository stepRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionGovernancePolicyRepository policyRepository = new InMemoryActionGovernancePolicyRepository();
+        InMemoryActionCompensationLogRepository compensationLogRepository = new InMemoryActionCompensationLogRepository();
+        Instant now = Instant.parse("2026-06-26T12:00:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.COMPENSATING, 1, 2, Map.of(),
+                null, null, 0, now, now.minusSeconds(120)
+        ));
+        stepRepository.saveAll(successSteps());
+        policyRepository.save(new ActionGovernancePolicy(
+                "policy-1", "order-cancel-flow", Boolean.TRUE, null, null, now
+        ));
+        compensationLogRepository.save(new ActionCompensationLog(
+                "log-1",
+                "batch-act-1",
+                "act-1",
+                "step-2",
+                1,
+                "send-user-sms",
+                "SMS",
+                "SUCCESS",
+                "demo.SmsCompensator",
+                "already compensated",
+                now.minusSeconds(30),
+                now.minusSeconds(30)
+        ));
+
+        CapturingCompensator mqCompensator = new CapturingCompensator("MQ_MESSAGE");
+        CapturingCompensator smsCompensator = new CapturingCompensator("SMS");
+        ActionCompensationService service = new ActionCompensationService(
+                actionInstanceRepository,
+                stepRepository,
+                new FixedDefinitionRegistry(false),
+                policyRepository,
+                compensationLogRepository,
+                new ActionCompensatorRegistry(List.of(mqCompensator, smsCompensator)),
+                Clock.fixed(now.plusSeconds(120), ZoneOffset.UTC)
+        );
+
+        int recovered = service.recoverInterruptedCompensations(10, Duration.ofSeconds(60));
+
+        assertThat(recovered).isEqualTo(1);
+        assertThat(smsCompensator.invocations()).isEmpty();
+        assertThat(mqCompensator.invocations()).hasSize(1);
+        assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.COMPENSATED);
+        assertThat(compensationLogRepository.findByActionInstanceId("act-1"))
+                .extracting(ActionCompensationLog::stepName)
+                .containsExactly("send-user-sms", "send-cancel-event");
     }
 
     @Test

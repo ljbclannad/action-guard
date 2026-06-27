@@ -151,6 +151,31 @@ class MysqlRepositoriesTest {
     }
 
     @Test
+    void shouldAllowRetryConsumptionAfterPreviousFailure() {
+        MysqlActionConsumeLogRepository repository = new MysqlActionConsumeLogRepository(mapper(ActionConsumeLogMapper.class));
+        Instant now = Instant.parse("2026-06-26T07:50:00Z");
+        ActionExecutionMessage message = new ActionExecutionMessage(
+                "ACTION_EXECUTE:outbox-2",
+                "ACTION_EXECUTE:act-2",
+                "outbox-2",
+                "act-2",
+                "ACTION_EXECUTE",
+                now
+        );
+
+        assertThat(repository.tryStartConsumption(message, "rabbitmq-main", now)).isTrue();
+        repository.markFailed(message.messageId(), "rabbitmq-main", now.plusSeconds(1), "callback failed");
+
+        assertThat(repository.tryStartConsumption(message, "rabbitmq-main", now.plusSeconds(2))).isTrue();
+        repository.markAcked(message.messageId(), "rabbitmq-main", now.plusSeconds(3));
+
+        assertThat(repository.findByMessageId(message.messageId())).isPresent();
+        assertThat(repository.findByMessageId(message.messageId()).orElseThrow().consumeStatus())
+                .isEqualTo(ActionConsumeStatus.ACKED);
+        assertThat(repository.findByMessageId(message.messageId()).orElseThrow().attemptCount()).isEqualTo(2);
+    }
+
+    @Test
     void shouldRejectStaleActionInstanceUpdate() {
         ObjectMapper objectMapper = new ObjectMapper();
         MysqlActionInstanceRepository repository = new MysqlActionInstanceRepository(mapper(ActionInstanceMapper.class), objectMapper);

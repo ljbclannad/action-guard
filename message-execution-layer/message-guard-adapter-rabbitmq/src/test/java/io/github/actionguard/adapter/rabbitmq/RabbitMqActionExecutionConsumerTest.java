@@ -208,6 +208,97 @@ class RabbitMqActionExecutionConsumerTest {
         assertThat(alertPublisher.events.get(0).type().name()).isEqualTo("DEAD_LETTER");
     }
 
+    @Test
+    void shouldMarkConsumeLogAckedAfterRetryMessageEventuallySucceeds() throws Exception {
+        FlakyCallback callback = new FlakyCallback();
+        InMemoryActionConsumeLogRepository consumeLogRepository = new InMemoryActionConsumeLogRepository();
+        RabbitMqActionExecutionConsumer consumer = new RabbitMqActionExecutionConsumer(
+                new ObjectMapper().findAndRegisterModules(),
+                consumeLogRepository,
+                callback,
+                "rabbitmq-main",
+                Clock.fixed(Instant.parse("2026-06-26T08:21:00Z"), ZoneOffset.UTC),
+                new RabbitMqConsumeStrategy(3)
+        );
+        byte[] payload = new ObjectMapper().findAndRegisterModules().writeValueAsBytes(new ActionExecutionMessage(
+                "ACTION_EXECUTE:outbox-4",
+                "ACTION_EXECUTE:action-4",
+                "outbox-4",
+                "action-4",
+                "ACTION_EXECUTE",
+                Instant.parse("2026-06-26T08:20:00Z")
+        ));
+        Message firstDelivery = MessageBuilder.withBody(payload)
+                .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                .setDeliveryTag(6L)
+                .build();
+        Message secondDelivery = MessageBuilder.withBody(payload)
+                .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                .setDeliveryTag(7L)
+                .setHeader("x-delivery-count", 1)
+                .build();
+        RecordingChannel firstChannel = new RecordingChannel();
+        RecordingChannel secondChannel = new RecordingChannel();
+
+        consumer.consume(firstDelivery, firstChannel.proxy());
+        consumer.consume(secondDelivery, secondChannel.proxy());
+
+        assertThat(firstChannel.nacks).containsExactly(6L);
+        assertThat(secondChannel.acks).containsExactly(7L);
+        assertThat(callback.invocationCount()).isEqualTo(2);
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-4")).isPresent();
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-4").orElseThrow().consumeStatus())
+                .isEqualTo(ActionConsumeStatus.ACKED);
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-4").orElseThrow().attemptCount())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldSkipDeadLetteredDuplicateMessageWithoutInvokingCallbackAgain() throws Exception {
+        FailingCallback callback = new FailingCallback();
+        InMemoryActionConsumeLogRepository consumeLogRepository = new InMemoryActionConsumeLogRepository();
+        RabbitMqActionExecutionConsumer consumer = new RabbitMqActionExecutionConsumer(
+                new ObjectMapper().findAndRegisterModules(),
+                consumeLogRepository,
+                callback,
+                "rabbitmq-main",
+                Clock.fixed(Instant.parse("2026-06-26T08:21:00Z"), ZoneOffset.UTC),
+                new RabbitMqConsumeStrategy(1)
+        );
+        byte[] payload = new ObjectMapper().findAndRegisterModules().writeValueAsBytes(new ActionExecutionMessage(
+                "ACTION_EXECUTE:outbox-5",
+                "ACTION_EXECUTE:action-5",
+                "outbox-5",
+                "action-5",
+                "ACTION_EXECUTE",
+                Instant.parse("2026-06-26T08:20:00Z")
+        ));
+        Message deadLetterDelivery = MessageBuilder.withBody(payload)
+                .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                .setDeliveryTag(8L)
+                .setHeader("x-delivery-count", 2)
+                .build();
+        Message duplicateDelivery = MessageBuilder.withBody(payload)
+                .setContentType(MessageProperties.CONTENT_TYPE_JSON)
+                .setDeliveryTag(9L)
+                .setHeader("x-delivery-count", 3)
+                .build();
+        RecordingChannel firstChannel = new RecordingChannel();
+        RecordingChannel secondChannel = new RecordingChannel();
+
+        consumer.consume(deadLetterDelivery, firstChannel.proxy());
+        consumer.consume(duplicateDelivery, secondChannel.proxy());
+
+        assertThat(firstChannel.rejects).containsExactly(8L);
+        assertThat(secondChannel.acks).containsExactly(9L);
+        assertThat(callback.invocationCount()).isEqualTo(1);
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-5")).isPresent();
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-5").orElseThrow().consumeStatus())
+                .isEqualTo(ActionConsumeStatus.DUPLICATE_SKIPPED);
+        assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-5").orElseThrow().attemptCount())
+                .isEqualTo(2);
+    }
+
     private static final class CapturingCallback implements ActionExecutionCallback {
         private final List<ActionExecutionMessage> received = new ArrayList<>();
 
@@ -223,9 +314,32 @@ class RabbitMqActionExecutionConsumerTest {
 
     private static final class FailingCallback implements ActionExecutionCallback {
 
+        private int invocationCount;
+
         @Override
         public void execute(ActionExecutionMessage message) {
+            invocationCount++;
             throw new IllegalStateException("callback failed");
+        }
+
+        private int invocationCount() {
+            return invocationCount;
+        }
+    }
+
+    private static final class FlakyCallback implements ActionExecutionCallback {
+        private int invocationCount;
+
+        @Override
+        public void execute(ActionExecutionMessage message) {
+            invocationCount++;
+            if (invocationCount == 1) {
+                throw new IllegalStateException("callback failed once");
+            }
+        }
+
+        private int invocationCount() {
+            return invocationCount;
         }
     }
 

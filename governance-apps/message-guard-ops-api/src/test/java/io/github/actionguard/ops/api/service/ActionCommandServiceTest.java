@@ -93,6 +93,78 @@ class ActionCommandServiceTest {
     }
 
     @Test
+    void shouldAuditFailedRetryWhenProducerIsUnavailable() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingMetricsRecorder metricsRecorder = new CapturingMetricsRecorder();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.FAILED, 0, 1, Map.of(),
+                "DOWNSTREAM_ERROR", "sms provider failed", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T12:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                new NoOpCompensationService(),
+                new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
+        );
+
+        assertThatThrownBy(() -> service.retry("act-1", "anonymous"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ActionExecutionMessageProducer is not available");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("FAILED");
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.governance.command|{actionName=unknown, command=RETRY, result=FAILED, stepType=unknown}", 1L);
+    }
+
+    @Test
+    void shouldRejectRetryWhenActionStatusIsDeadAndStillAuditFailure() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingMetricsRecorder metricsRecorder = new CapturingMetricsRecorder();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.DEAD, 0, 1, Map.of(),
+                "DEAD_LETTER", "message dead-lettered", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.DEAD, Instant.parse("2026-06-26T12:00:00Z"),
+                2, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.of(new CapturingProducer()),
+                new NoOpCompensationService(),
+                new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
+        );
+
+        assertThatThrownBy(() -> service.retry("act-1", "anonymous"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Retry is not allowed");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("FAILED");
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.governance.command|{actionName=unknown, command=RETRY, result=FAILED, stepType=unknown}", 1L);
+    }
+
+    @Test
     void shouldCancelDispatchingActionAndMoveToIgnored() {
         InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
         InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
@@ -209,6 +281,35 @@ class ActionCommandServiceTest {
         assertThat(compensationService.compensatedActionIds()).containsExactly("act-1");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).operationType()).isEqualTo("COMPENSATE");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void shouldAllowCompensateAgainWhenActionIsDead() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.DEAD, 0, 1, Map.of(),
+                "COMPENSATION_FAILED", "first compensation failed", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:01:00Z")
+        ));
+
+        CapturingCompensationService compensationService = new CapturingCompensationService();
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                compensationService
+        );
+
+        service.compensate("act-1", "anonymous");
+
+        assertThat(compensationService.compensatedActionIds()).containsExactly("act-1");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
     }
 

@@ -41,7 +41,17 @@ public class MysqlActionConsumeLogRepository implements ActionConsumeLogReposito
             mapper.insert(row);
             return true;
         } catch (DuplicateKeyException ex) {
-            return false;
+            ActionConsumeLogRow existing = mapper.selectByMessageId(message.messageId());
+            if (existing == null || !ActionConsumeStatus.FAILED.name().equals(existing.getConsumeStatus())) {
+                return false;
+            }
+            existing.setConsumerGroup(consumerGroup);
+            existing.setConsumeStatus(ActionConsumeStatus.EXECUTING.name());
+            existing.setAttemptCount(existing.getAttemptCount() + 1);
+            existing.setLastErrorMessage(null);
+            existing.setLastReceivedAt(Timestamp.from(now));
+            existing.setUpdatedAt(Timestamp.from(now));
+            return mapper.updateOptimistically(existing) == 1;
         }
     }
 

@@ -30,7 +30,30 @@ public class InMemoryActionConsumeLogRepository implements ActionConsumeLogRepos
                 now,
                 now
         );
-        return storage.putIfAbsent(message.messageId(), log) == null;
+        ActionConsumeLog inserted = storage.putIfAbsent(message.messageId(), log);
+        if (inserted == null) {
+            return true;
+        }
+        return storage.computeIfPresent(message.messageId(), (key, existing) -> {
+            if (existing.consumeStatus() != ActionConsumeStatus.FAILED) {
+                return existing;
+            }
+            return new ActionConsumeLog(
+                    existing.id(),
+                    existing.messageId(),
+                    existing.actionInstanceId(),
+                    consumerGroup,
+                    ActionConsumeStatus.EXECUTING,
+                    existing.dedupeKey(),
+                    existing.attemptCount() + 1,
+                    null,
+                    existing.version() + 1,
+                    existing.firstReceivedAt(),
+                    now,
+                    now
+            );
+        }).consumeStatus() == ActionConsumeStatus.EXECUTING
+                && storage.get(message.messageId()).attemptCount() == inserted.attemptCount() + 1;
     }
 
     @Override
