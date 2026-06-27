@@ -1,8 +1,10 @@
 package io.github.actionguard.store.mysql;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.actionguard.core.repository.ActionCompensationLogRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionConsumeLogRepository;
+import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.store.mysql.mapper.ActionConsumeLogMapper;
@@ -13,6 +15,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
@@ -44,5 +47,15 @@ public class MysqlActionGuardStoreAutoConfiguration {
     @Bean
     public ActionConsumeLogRepository actionConsumeLogRepository(ActionConsumeLogMapper mapper) {
         return new MysqlActionConsumeLogRepository(mapper);
+    }
+
+    @Bean
+    public ActionGovernancePolicyRepository actionGovernancePolicyRepository(JdbcTemplate jdbcTemplate) {
+        return new MysqlActionGovernancePolicyRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public ActionCompensationLogRepository actionCompensationLogRepository(JdbcTemplate jdbcTemplate) {
+        return new MysqlActionCompensationLogRepository(jdbcTemplate);
     }
 }

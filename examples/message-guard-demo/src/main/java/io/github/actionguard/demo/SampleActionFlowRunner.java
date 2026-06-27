@@ -2,12 +2,14 @@ package io.github.actionguard.demo;
 
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.ActionRequest;
+import io.github.actionguard.api.ActionStepRequest;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 @Component
+@ConditionalOnProperty(prefix = "demo.runner", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class SampleActionFlowRunner implements ApplicationRunner {
 
     private final ActionPublisher actionPublisher;
@@ -39,8 +42,17 @@ public class SampleActionFlowRunner implements ApplicationRunner {
         actionPublisher.publish(new ActionRequest(
                 "demo-notify-success",
                 bizKey,
-                Map.of("operator", "demo", "phone", "13800000000"),
-                List.of()
+                Map.of("operator", "demo"),
+                List.of(new ActionStepRequest(
+                        "send-user-sms",
+                        "NOTIFY_SMS_SEND",
+                        "mock-sms",
+                        Map.of(
+                                "phoneNumbers", List.of("13800000000"),
+                                "templateId", "demo-notify",
+                                "variables", Map.of("bizKey", bizKey)
+                        )
+                ))
         ));
 
         ActionInstance published = actionInstanceRepository.findByActionNameAndBizKey("demo-notify-success", bizKey)

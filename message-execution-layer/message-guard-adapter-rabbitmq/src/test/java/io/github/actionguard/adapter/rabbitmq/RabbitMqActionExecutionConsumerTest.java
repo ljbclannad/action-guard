@@ -3,8 +3,11 @@ package io.github.actionguard.adapter.rabbitmq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Channel;
 import io.github.actionguard.api.runtime.ActionExecutionMessage;
+import io.github.actionguard.api.runtime.ActionAlertEvent;
+import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.core.model.ActionConsumeStatus;
 import io.github.actionguard.core.repository.InMemoryActionConsumeLogRepository;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.core.runtime.ActionExecutionCallback;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
@@ -19,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.InvocationHandler;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 class RabbitMqActionExecutionConsumerTest {
@@ -167,13 +171,15 @@ class RabbitMqActionExecutionConsumerTest {
     void shouldRejectToDeadLetterWhenCallbackFailsAfterRetryLimit() throws Exception {
         FailingCallback callback = new FailingCallback();
         InMemoryActionConsumeLogRepository consumeLogRepository = new InMemoryActionConsumeLogRepository();
+        CapturingAlertPublisher alertPublisher = new CapturingAlertPublisher();
         RabbitMqActionExecutionConsumer consumer = new RabbitMqActionExecutionConsumer(
                 new ObjectMapper().findAndRegisterModules(),
                 consumeLogRepository,
                 callback,
                 "rabbitmq-main",
                 Clock.fixed(Instant.parse("2026-06-26T08:21:00Z"), ZoneOffset.UTC),
-                new RabbitMqConsumeStrategy(1)
+                new RabbitMqConsumeStrategy(1),
+                new ActionObservabilityService(Optional.of(alertPublisher), Optional.empty(), Clock.fixed(Instant.parse("2026-06-26T08:21:00Z"), ZoneOffset.UTC))
         );
         byte[] payload = new ObjectMapper().findAndRegisterModules().writeValueAsBytes(new ActionExecutionMessage(
                 "ACTION_EXECUTE:outbox-3",
@@ -198,6 +204,8 @@ class RabbitMqActionExecutionConsumerTest {
         assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-3")).isPresent();
         assertThat(consumeLogRepository.findByMessageId("ACTION_EXECUTE:outbox-3").orElseThrow().consumeStatus())
                 .isEqualTo(ActionConsumeStatus.DEAD_LETTERED);
+        assertThat(alertPublisher.events).hasSize(1);
+        assertThat(alertPublisher.events.get(0).type().name()).isEqualTo("DEAD_LETTER");
     }
 
     private static final class CapturingCallback implements ActionExecutionCallback {
@@ -218,6 +226,15 @@ class RabbitMqActionExecutionConsumerTest {
         @Override
         public void execute(ActionExecutionMessage message) {
             throw new IllegalStateException("callback failed");
+        }
+    }
+
+    private static final class CapturingAlertPublisher implements ActionAlertPublisher {
+        private final List<ActionAlertEvent> events = new ArrayList<>();
+
+        @Override
+        public void publish(ActionAlertEvent event) {
+            events.add(event);
         }
     }
 

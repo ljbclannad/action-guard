@@ -2,6 +2,7 @@ package io.github.actionguard.adapter.rabbitmq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.core.repository.ActionConsumeLogRepository;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.core.runtime.ActionExecutionCallback;
 import io.github.actionguard.core.runtime.ActionExecutionMessageFactory;
 import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
@@ -61,7 +62,8 @@ public class RabbitMqActionExecutionAutoConfiguration {
             ActionExecutionCallback actionExecutionCallback,
             ActionGuardRabbitMqProperties properties,
             Clock clock,
-            RabbitMqConsumeStrategy rabbitMqConsumeStrategy
+            RabbitMqConsumeStrategy rabbitMqConsumeStrategy,
+            ActionObservabilityService actionObservabilityService
     ) {
         return new RabbitMqActionExecutionConsumer(
                 actionGuardRabbitMqObjectMapper,
@@ -69,7 +71,8 @@ public class RabbitMqActionExecutionAutoConfiguration {
                 actionExecutionCallback,
                 properties.getConsumerGroup(),
                 clock,
-                rabbitMqConsumeStrategy
+                rabbitMqConsumeStrategy,
+                actionObservabilityService
         );
     }
 }

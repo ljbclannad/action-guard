@@ -12,6 +12,8 @@ import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
 import io.github.actionguard.core.repository.ActionCompensationLogRepository;
 import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
+import io.github.actionguard.core.repository.InMemoryActionCompensationLogRepository;
+import io.github.actionguard.core.repository.InMemoryActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -219,6 +224,7 @@ class ActionCompensationServiceTest {
         policyRepository.save(new ActionGovernancePolicy(
                 "policy-1", "order-cancel-flow", Boolean.TRUE, null, null, Instant.parse("2026-06-26T12:00:00Z")
         ));
+        CapturingMetricsRecorder metricsRecorder = new CapturingMetricsRecorder();
 
         ActionCompensationService service = new ActionCompensationService(
                 actionInstanceRepository,
@@ -227,6 +233,7 @@ class ActionCompensationServiceTest {
                 policyRepository,
                 compensationLogRepository,
                 new ActionCompensatorRegistry(List.of(new CapturingCompensator("MQ_MESSAGE"), new CapturingCompensator("SMS"))),
+                new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:01:00Z"), ZoneOffset.UTC)),
                 Clock.fixed(Instant.parse("2026-06-26T12:01:00Z"), ZoneOffset.UTC)
         );
 
@@ -236,6 +243,8 @@ class ActionCompensationServiceTest {
         assertThat(compensationLogRepository.findByActionInstanceId("act-1"))
                 .extracting(ActionCompensationLog::compensationStatus)
                 .containsExactly("SUCCESS", "SUCCESS");
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.action.compensated|{actionName=order-cancel-flow, result=compensated, stepType=unknown}", 1L);
     }
 
     @Test
@@ -269,6 +278,124 @@ class ActionCompensationServiceTest {
         assertThat(compensationLogRepository.findByActionInstanceId("act-1")).isEmpty();
     }
 
+    private static final class CapturingMetricsRecorder implements io.github.actionguard.api.spi.ActionMetricsRecorder {
+        private final java.util.LinkedHashMap<String, Long> counters = new java.util.LinkedHashMap<>();
+
+        @Override
+        public void increment(String metricName, Map<String, String> tags) {
+            String key = metricName + "|" + new java.util.TreeMap<>(tags);
+            counters.merge(key, 1L, Long::sum);
+        }
+    }
+
+    @Test
+    void shouldRecoverInterruptedCompensationFromRemainingSteps() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionStepInstanceRepository stepRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionGovernancePolicyRepository policyRepository = new InMemoryActionGovernancePolicyRepository();
+        InMemoryActionCompensationLogRepository compensationLogRepository = new InMemoryActionCompensationLogRepository();
+        Instant createdAt = Instant.parse("2026-06-26T12:00:00Z");
+        Instant staleAt = Instant.parse("2026-06-26T12:01:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.COMPENSATING, 1, 2, Map.of(),
+                null, null, 0, createdAt, staleAt
+        ));
+        stepRepository.saveAll(successSteps());
+        policyRepository.save(new ActionGovernancePolicy(
+                "policy-1", "order-cancel-flow", Boolean.TRUE, null, null, createdAt
+        ));
+        compensationLogRepository.save(new ActionCompensationLog(
+                "log-1", "batch-act-1", "act-1", "step-2", 1, "send-user-sms", "SMS",
+                "SUCCESS", CapturingCompensator.class.getName(), "ok", staleAt, staleAt
+        ));
+
+        CapturingCompensator mqCompensator = new CapturingCompensator("MQ_MESSAGE");
+        CapturingCompensator smsCompensator = new CapturingCompensator("SMS");
+        ActionCompensationService service = new ActionCompensationService(
+                actionInstanceRepository,
+                stepRepository,
+                new FixedDefinitionRegistry(false),
+                policyRepository,
+                compensationLogRepository,
+                new ActionCompensatorRegistry(List.of(mqCompensator, smsCompensator)),
+                Clock.fixed(Instant.parse("2026-06-26T12:03:00Z"), ZoneOffset.UTC)
+        );
+
+        int recovered = service.recoverInterruptedCompensations(10, java.time.Duration.ofSeconds(30));
+
+        assertThat(recovered).isEqualTo(1);
+        assertThat(smsCompensator.invocations()).isEmpty();
+        assertThat(mqCompensator.invocations()).hasSize(1);
+        assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.COMPENSATED);
+        assertThat(compensationLogRepository.findByActionInstanceId("act-1"))
+                .extracting(ActionCompensationLog::compensationStatus)
+                .containsExactly("SUCCESS", "SUCCESS");
+    }
+
+    @Test
+    void shouldAllowOnlyOneNodeToCompensateWhenConcurrentRequestsConflict() throws Exception {
+        CoordinatedConflictActionInstanceRepository actionInstanceRepository = new CoordinatedConflictActionInstanceRepository(2);
+        InMemoryActionStepInstanceRepository stepRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionGovernancePolicyRepository policyRepository = new InMemoryActionGovernancePolicyRepository();
+        InMemoryActionCompensationLogRepository compensationLogRepository = new InMemoryActionCompensationLogRepository();
+        Instant now = Instant.parse("2026-06-26T12:00:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.FAILED, 1, 2, Map.of(),
+                "DOWNSTREAM_ERROR", "failed", 0, now, now
+        ));
+        stepRepository.saveAll(successSteps());
+        policyRepository.save(new ActionGovernancePolicy(
+                "policy-1", "order-cancel-flow", Boolean.TRUE, null, null, now
+        ));
+
+        CapturingCompensator mqCompensator = new CapturingCompensator("MQ_MESSAGE");
+        CapturingCompensator smsCompensator = new CapturingCompensator("SMS");
+        ActionCompensationService first = new ActionCompensationService(
+                actionInstanceRepository,
+                stepRepository,
+                new FixedDefinitionRegistry(false),
+                policyRepository,
+                compensationLogRepository,
+                new ActionCompensatorRegistry(List.of(mqCompensator, smsCompensator)),
+                Clock.fixed(now.plusSeconds(30), ZoneOffset.UTC)
+        );
+        ActionCompensationService second = new ActionCompensationService(
+                actionInstanceRepository,
+                stepRepository,
+                new FixedDefinitionRegistry(false),
+                policyRepository,
+                compensationLogRepository,
+                new ActionCompensatorRegistry(List.of(mqCompensator, smsCompensator)),
+                Clock.fixed(now.plusSeconds(30), ZoneOffset.UTC)
+        );
+        List<Throwable> failures = new CopyOnWriteArrayList<>();
+
+        Thread node1 = new Thread(() -> invokeCompensate(first, failures));
+        Thread node2 = new Thread(() -> invokeCompensate(second, failures));
+
+        node1.start();
+        node2.start();
+        node1.join(2000);
+        node2.join(2000);
+
+        assertThat(failures).hasSize(1);
+        assertThat(failures.get(0)).isInstanceOf(OptimisticLockingFailureException.class);
+        assertThat(mqCompensator.invocations()).hasSize(1);
+        assertThat(smsCompensator.invocations()).hasSize(1);
+        assertThat(compensationLogRepository.findByActionInstanceId("act-1"))
+                .extracting(ActionCompensationLog::compensationStatus)
+                .containsExactly("SUCCESS", "SUCCESS");
+        assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.COMPENSATED);
+    }
+
+    private void invokeCompensate(ActionCompensationService service, List<Throwable> failures) {
+        try {
+            service.compensate("act-1");
+        } catch (Throwable ex) {
+            failures.add(ex);
+        }
+    }
+
     private List<ActionStepInstance> successSteps() {
         Instant now = Instant.parse("2026-06-26T12:00:00Z");
         return List.of(
@@ -300,37 +427,6 @@ class ActionCompensationServiceTest {
         }
     }
 
-    private static final class InMemoryActionGovernancePolicyRepository implements ActionGovernancePolicyRepository {
-        private final List<ActionGovernancePolicy> storage = new ArrayList<>();
-
-        @Override
-        public Optional<ActionGovernancePolicy> findByActionName(String actionName) {
-            return storage.stream().filter(policy -> policy.actionName().equals(actionName)).findFirst();
-        }
-
-        @Override
-        public ActionGovernancePolicy save(ActionGovernancePolicy policy) {
-            storage.removeIf(existing -> existing.actionName().equals(policy.actionName()));
-            storage.add(policy);
-            return policy;
-        }
-    }
-
-    private static final class InMemoryActionCompensationLogRepository implements ActionCompensationLogRepository {
-        private final List<ActionCompensationLog> storage = new ArrayList<>();
-
-        @Override
-        public ActionCompensationLog save(ActionCompensationLog log) {
-            storage.add(log);
-            return log;
-        }
-
-        @Override
-        public List<ActionCompensationLog> findByActionInstanceId(String actionInstanceId) {
-            return storage.stream().filter(log -> log.actionInstanceId().equals(actionInstanceId)).toList();
-        }
-    }
-
     private static final class ConflictActionInstanceRepository extends InMemoryActionInstanceRepository {
         private boolean forceNextConflict;
 
@@ -345,6 +441,35 @@ class ActionCompensationServiceTest {
                 throw new OptimisticLockingFailureException("forced conflict");
             }
             return super.save(instance);
+        }
+    }
+
+    private static final class CoordinatedConflictActionInstanceRepository extends InMemoryActionInstanceRepository {
+        private final CountDownLatch readersReady;
+        private final CountDownLatch releaseReaders = new CountDownLatch(1);
+
+        private CoordinatedConflictActionInstanceRepository(int concurrentReaders) {
+            this.readersReady = new CountDownLatch(concurrentReaders);
+        }
+
+        @Override
+        public Optional<ActionInstance> findById(String id) {
+            Optional<ActionInstance> instance = super.findById(id);
+            if (instance.isPresent() && instance.orElseThrow().status() == ActionStatus.FAILED) {
+                readersReady.countDown();
+                try {
+                    if (readersReady.await(2, TimeUnit.SECONDS)) {
+                        releaseReaders.countDown();
+                    }
+                    if (!releaseReaders.await(2, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("timed out waiting for concurrent readers");
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while coordinating concurrent compensation", ex);
+                }
+            }
+            return instance;
         }
     }
 

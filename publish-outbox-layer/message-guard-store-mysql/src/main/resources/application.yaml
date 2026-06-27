@@ -1,14 +1,12 @@
 spring:
   datasource:
-    host: 127.0.0.1
-    port: 3306
-    username: root
-    password: root
-    url: jdbc:mysql://127.0.0.1:3306/action_guard?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: sa
+    password:
+    url: jdbc:h2:file:${ACTION_GUARD_H2_PATH:${user.home}/.action-guard/action-guard-db/action_guard};MODE=MySQL;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
-      pool-name: action-guard-mysql
+      pool-name: action-guard-h2
       minimum-idle: 2
       maximum-pool-size: 10
       connection-timeout: 30000

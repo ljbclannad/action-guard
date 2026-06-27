@@ -34,8 +34,8 @@ class DefaultActionPublisherTest {
                 "demo",
                 false,
                 List.of(
-                        new ActionStepDefinition("send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange"),
-                        new ActionStepDefinition("send-user-sms", "SMS", "notify.user")
+                        new ActionStepDefinition("send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange", null, null, null),
+                        new ActionStepDefinition("send-user-sms", "SMS", "notify.user", null, null, null)
                 )
         );
         ActionDefinitionRegistry definitionRegistry = new InMemoryActionDefinitionRegistry(

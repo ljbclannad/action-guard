@@ -9,6 +9,8 @@ public class ActionGuardProperties {
 
     private List<String> definitionLocations = List.of("classpath*:actions/*.yml", "classpath*:actions/*.yaml");
     private int publishRetryMaxAttempts = 1;
+    private boolean metricsEnabled = true;
+    private ActionGuardRecoveryProperties recovery = new ActionGuardRecoveryProperties();
 
     public List<String> getDefinitionLocations() {
         return definitionLocations;
@@ -24,5 +26,21 @@ public class ActionGuardProperties {
 
     public void setPublishRetryMaxAttempts(int publishRetryMaxAttempts) {
         this.publishRetryMaxAttempts = publishRetryMaxAttempts;
+    }
+
+    public boolean isMetricsEnabled() {
+        return metricsEnabled;
+    }
+
+    public void setMetricsEnabled(boolean metricsEnabled) {
+        this.metricsEnabled = metricsEnabled;
+    }
+
+    public ActionGuardRecoveryProperties getRecovery() {
+        return recovery;
+    }
+
+    public void setRecovery(ActionGuardRecoveryProperties recovery) {
+        this.recovery = recovery;
     }
 }

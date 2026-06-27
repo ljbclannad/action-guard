@@ -22,6 +22,16 @@
         <artifactId>action-guard-core</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.github.actionguard</groupId>
+        <artifactId>action-guard-adapter-notify</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.actionguard</groupId>
+        <artifactId>action-guard-adapter-im</artifactId>
+        <version>${project.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>

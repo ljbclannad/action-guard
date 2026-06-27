@@ -6,22 +6,41 @@ import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
 import io.github.actionguard.core.model.ActionStatus;
+import io.github.actionguard.core.runtime.ActionDefinitionRegistry;
+import io.github.actionguard.core.runtime.ActionDefinitionValidator;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
 import io.github.actionguard.core.runtime.ActionCompensationExecutor;
+import io.github.actionguard.core.runtime.ActionExecutionCallback;
 import io.github.actionguard.ops.api.support.ActionCommandValidator;
 import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
+import io.github.actionguard.core.runtime.DefaultActionExecutionCallback;
+import io.github.actionguard.core.runtime.FixedAttemptActionRetryPolicy;
+import io.github.actionguard.core.runtime.InMemoryActionDefinitionRegistry;
+import io.github.actionguard.core.runtime.StepHandlerRegistry;
 import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
 import io.github.actionguard.ops.api.repository.jdbc.InMemoryAuditLogRepository;
+import io.github.actionguard.api.definition.ActionDefinition;
+import io.github.actionguard.api.definition.ActionStepDefinition;
+import io.github.actionguard.api.runtime.ActionExecutionMessage;
+import io.github.actionguard.api.runtime.ActionStepContext;
+import io.github.actionguard.api.runtime.StepExecutionResult;
+import io.github.actionguard.api.spi.ActionStepHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,6 +70,7 @@ class ActionCommandServiceTest {
                 "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T12:00:00Z"),
                 0, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
         ));
+        CapturingMetricsRecorder metricsRecorder = new CapturingMetricsRecorder();
 
         ActionCommandService service = new ActionCommandService(
                 actionInstanceRepository,
@@ -59,7 +79,8 @@ class ActionCommandServiceTest {
                 new ActionCommandValidator(),
                 new ActionAuditService(auditLogRepository),
                 Optional.of(producer),
-                new NoOpCompensationService()
+                new NoOpCompensationService(),
+                new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
         );
 
         service.retry("act-1", "anonymous");
@@ -67,6 +88,8 @@ class ActionCommandServiceTest {
         assertThat(producer.published()).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).operationType()).isEqualTo("RETRY");
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.governance.command|{actionName=unknown, command=RETRY, result=SUCCESS, stepType=unknown}", 1L);
     }
 
     @Test
@@ -190,6 +213,182 @@ class ActionCommandServiceTest {
     }
 
     @Test
+    void shouldTreatRepeatedCancelAsIdempotentSuccess() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.IGNORED, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:01:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                new NoOpCompensationService()
+        );
+
+        service.cancel("act-1", "anonymous");
+
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void shouldTreatRepeatedCompensateAsIdempotentSuccess() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingCompensationService compensationService = new CapturingCompensationService();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.COMPENSATED, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:01:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                compensationService
+        );
+
+        service.compensate("act-1", "anonymous");
+
+        assertThat(compensationService.compensatedActionIds()).isEmpty();
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void shouldTreatRetryingActionWithScheduledOutboxAsIdempotentRetry() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingProducer producer = new CapturingProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.RETRYING, 0, 1, Map.of(),
+                "DOWNSTREAM_ERROR", "sms provider failed", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:01:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T12:02:00Z"),
+                1, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:01:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.of(producer),
+                new NoOpCompensationService()
+        );
+
+        service.retry("act-1", "anonymous");
+
+        assertThat(producer.published()).isEmpty();
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void shouldIgnoreRedeliveredMessageAfterManualCancelWinsConflict() throws Exception {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        Instant now = Instant.parse("2026-06-26T12:00:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.DISPATCHING, 0, 1, Map.of(),
+                null, null, 0, now, now
+        ));
+        actionStepInstanceRepository.save(new ActionStepInstance(
+                "step-1", "act-1", 0, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(),
+                null, null, 0, now, now
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, now,
+                0, 0, now, now
+        ));
+
+        BlockingSuccessHandler handler = new BlockingSuccessHandler("SMS");
+        ActionExecutionCallback callback = new DefaultActionExecutionCallback(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                definitionRegistry(),
+                new StepHandlerRegistry(List.of(handler)),
+                new FixedAttemptActionRetryPolicy(0),
+                actionOutboxRepository,
+                Optional.empty(),
+                Clock.fixed(now.plusSeconds(30), java.time.ZoneOffset.UTC)
+        );
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                new NoOpCompensationService()
+        );
+        ActionExecutionMessage message = new ActionExecutionMessage(
+                "ACTION_EXECUTE:outbox-1",
+                "ACTION_EXECUTE:act-1",
+                "outbox-1",
+                "act-1",
+                "ACTION_EXECUTE",
+                now
+        );
+        AtomicReference<Throwable> runtimeFailure = new AtomicReference<>();
+        Thread runtimeThread = new Thread(() -> {
+            try {
+                callback.execute(message);
+            } catch (Throwable ex) {
+                runtimeFailure.set(ex);
+            }
+        });
+
+        runtimeThread.start();
+        assertThat(handler.started.await(2, TimeUnit.SECONDS)).isTrue();
+
+        service.cancel("act-1", "anonymous");
+        handler.release.countDown();
+        runtimeThread.join(2000);
+
+        assertThat(runtimeFailure.get()).isInstanceOf(OptimisticLockingFailureException.class);
+        assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.IGNORED);
+        assertThat(handler.invocationCount()).isEqualTo(1);
+
+        callback.execute(message);
+
+        assertThat(handler.invocationCount()).isEqualTo(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).operationType()).isEqualTo("CANCEL");
+    }
+
+    private static ActionDefinitionRegistry definitionRegistry() {
+        return new InMemoryActionDefinitionRegistry(
+                List.of(new ActionDefinition(
+                        "order-cancel-flow",
+                        "demo",
+                        false,
+                        List.of(new ActionStepDefinition("send-user-sms", "SMS", "notify.user", null, null, null))
+                )),
+                new ActionDefinitionValidator()
+        );
+    }
+
+    @Test
     void shouldAuditFailedCancelWhenVersionConflictOccurs() {
         ConflictActionInstanceRepository actionInstanceRepository = new ConflictActionInstanceRepository();
         InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
@@ -227,6 +426,16 @@ class ActionCommandServiceTest {
 
         private List<ActionOutbox> published() {
             return List.copyOf(published);
+        }
+    }
+
+    private static final class CapturingMetricsRecorder implements io.github.actionguard.api.spi.ActionMetricsRecorder {
+        private final java.util.LinkedHashMap<String, Long> counters = new java.util.LinkedHashMap<>();
+
+        @Override
+        public void increment(String metricName, Map<String, String> tags) {
+            String key = metricName + "|" + new java.util.TreeMap<>(tags);
+            counters.merge(key, 1L, Long::sum);
         }
     }
 
@@ -272,6 +481,41 @@ class ActionCommandServiceTest {
                 throw new OptimisticLockingFailureException("forced conflict");
             }
             return super.save(instance);
+        }
+    }
+
+    private static final class BlockingSuccessHandler implements ActionStepHandler {
+        private final String stepType;
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+        private volatile int invocationCount;
+
+        private BlockingSuccessHandler(String stepType) {
+            this.stepType = stepType;
+        }
+
+        @Override
+        public String stepType() {
+            return stepType;
+        }
+
+        @Override
+        public StepExecutionResult execute(ActionStepContext context) {
+            invocationCount++;
+            started.countDown();
+            try {
+                if (!release.await(2, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("timed out waiting for release");
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted", ex);
+            }
+            return StepExecutionResult.succeeded();
+        }
+
+        private int invocationCount() {
+            return invocationCount;
         }
     }
 }

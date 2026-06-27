@@ -7,6 +7,7 @@ import io.github.actionguard.core.model.ActionOutbox;
 import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -23,6 +24,23 @@ public class TransactionalActionPublisher implements ActionPublisher {
     private final ActionOutboxRepository actionOutboxRepository;
     private final Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer;
     private final int publishRetryMaxAttempts;
+    private final ActionObservabilityService actionObservabilityService;
+
+    public TransactionalActionPublisher(
+            ActionPublisher delegate,
+            ActionInstanceRepository actionInstanceRepository,
+            ActionOutboxRepository actionOutboxRepository,
+            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
+            int publishRetryMaxAttempts,
+            ActionObservabilityService actionObservabilityService
+    ) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
+        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
+        this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
+        this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
+        this.publishRetryMaxAttempts = Math.max(1, publishRetryMaxAttempts);
+        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+    }
 
     public TransactionalActionPublisher(
             ActionPublisher delegate,
@@ -31,11 +49,14 @@ public class TransactionalActionPublisher implements ActionPublisher {
             Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
             int publishRetryMaxAttempts
     ) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
-        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
-        this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
-        this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
-        this.publishRetryMaxAttempts = Math.max(1, publishRetryMaxAttempts);
+        this(
+                delegate,
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionExecutionMessageProducer,
+                publishRetryMaxAttempts,
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), java.time.Clock.systemUTC())
+        );
     }
 
     @Override
@@ -79,6 +100,9 @@ public class TransactionalActionPublisher implements ActionPublisher {
                 int nextAttemptCount = attempt;
                 ActionOutboxStatus nextStatus = attempt >= publishRetryMaxAttempts ? ActionOutboxStatus.DEAD : ActionOutboxStatus.NEW;
                 currentOutbox = markOutbox(currentOutbox, nextStatus, nextAttemptCount);
+                if (nextStatus == ActionOutboxStatus.DEAD) {
+                    actionObservabilityService.outboxPublishFailed(currentOutbox, nextAttemptCount, ex.getMessage());
+                }
             }
         }
         throw Objects.requireNonNull(lastFailure, "lastFailure must not be null");

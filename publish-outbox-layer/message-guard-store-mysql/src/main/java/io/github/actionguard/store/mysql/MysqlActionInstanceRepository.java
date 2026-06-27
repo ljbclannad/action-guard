@@ -11,6 +11,8 @@ import io.github.actionguard.store.mysql.mapper.ActionInstanceRow;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -34,6 +36,20 @@ public class MysqlActionInstanceRepository implements ActionInstanceRepository {
     @Override
     public Optional<ActionInstance> findByActionNameAndBizKey(String actionName, String bizKey) {
         return Optional.ofNullable(mapper.selectByActionNameAndBizKey(actionName, bizKey)).map(this::toModel);
+    }
+
+    @Override
+    public List<ActionInstance> findByStatusesAndUpdatedBefore(List<ActionStatus> statuses, Instant updatedBeforeOrAt, int limit) {
+        if (statuses == null || statuses.isEmpty() || limit <= 0) {
+            return List.of();
+        }
+        return mapper.selectByStatusesUpdatedBefore(
+                        statuses.stream().map(Enum::name).toList(),
+                        Timestamp.from(updatedBeforeOrAt),
+                        limit
+                ).stream()
+                .map(this::toModel)
+                .toList();
     }
 
     @Override

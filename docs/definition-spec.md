@@ -148,7 +148,7 @@ Registration rules:
 Example module ownership:
 
 - `MQ_MESSAGE` -> RabbitMQ adapter module
-- `KAFKA_MESSAGE` -> Kafka adapter module
+- `KAFKA_MESSAGE` -> Kafka adapter module（模块占位保留，第一版不作为推荐接入路径）
 - `IM_GROUP_CREATE` -> IM adapter module
 - `IM_GROUP_INVITE` -> IM adapter module
 - `IM_GROUP_MESSAGE_SEND` -> IM adapter module

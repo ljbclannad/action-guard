@@ -14,5 +14,7 @@
 
   <modules>
     <module>message-guard-alert-webhook</module>
+    <module>message-guard-adapter-notify</module>
+    <module>message-guard-adapter-im</module>
   </modules>
 </project>

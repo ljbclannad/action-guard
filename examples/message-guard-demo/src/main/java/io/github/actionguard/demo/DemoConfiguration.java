@@ -2,12 +2,13 @@ package io.github.actionguard.demo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.adapter.rabbitmq.RabbitMqActionExecutionConsumer;
-import io.github.actionguard.api.runtime.ActionStepContext;
-import io.github.actionguard.api.runtime.StepExecutionResult;
-import io.github.actionguard.api.spi.ActionStepHandler;
 import io.github.actionguard.adapter.rabbitmq.ActionGuardRabbitMqProperties;
 import io.github.actionguard.adapter.rabbitmq.RabbitMqConsumeStrategy;
+import io.github.actionguard.notify.NotifySendResult;
+import io.github.actionguard.notify.NotifySmsRequest;
+import io.github.actionguard.notify.NotifySmsSender;
 import io.github.actionguard.core.repository.ActionConsumeLogRepository;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.core.runtime.ActionExecutionCallback;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
@@ -39,7 +40,8 @@ public class DemoConfiguration {
             ActionExecutionCallback actionExecutionCallback,
             ActionGuardRabbitMqProperties properties,
             Clock clock,
-            RabbitMqConsumeStrategy rabbitMqConsumeStrategy
+            RabbitMqConsumeStrategy rabbitMqConsumeStrategy,
+            ActionObservabilityService actionObservabilityService
     ) {
         return new RabbitMqActionExecutionConsumer(
                 objectMapper,
@@ -47,22 +49,23 @@ public class DemoConfiguration {
                 actionExecutionCallback,
                 properties.getConsumerGroup(),
                 clock,
-                rabbitMqConsumeStrategy
+                rabbitMqConsumeStrategy,
+                actionObservabilityService
         );
     }
 
     @Bean
-    ActionStepHandler smsActionStepHandler() {
-        return new ActionStepHandler() {
+    NotifySmsSender demoNotifySmsSender() {
+        return new NotifySmsSender() {
             @Override
-            public String stepType() {
-                return "SMS";
+            public String provider() {
+                return "mock-sms";
             }
 
             @Override
-            public StepExecutionResult execute(ActionStepContext context) {
-                System.out.println("send sms to " + context.attributes().get("phone"));
-                return StepExecutionResult.succeeded();
+            public NotifySendResult send(NotifySmsRequest request) {
+                System.out.println("send sms to " + request.phoneNumbers() + " template=" + request.templateId());
+                return NotifySendResult.succeeded();
             }
         };
     }

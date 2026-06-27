@@ -17,7 +17,8 @@ public class FixedAttemptActionRetryPolicy implements ActionRetryPolicy {
 
     @Override
     public ActionRetryAction decide(Throwable throwable, ActionRetryContext context) {
-        return context.retryable() && context.currentRetryCount() < maxRetryCount
+        int effectiveMaxRetryCount = Math.min(maxRetryCount, context.maxRetryCount());
+        return context.retryable() && context.currentRetryCount() < effectiveMaxRetryCount
                 ? ActionRetryAction.IMMEDIATE_RETRY
                 : ActionRetryAction.DEAD;
     }

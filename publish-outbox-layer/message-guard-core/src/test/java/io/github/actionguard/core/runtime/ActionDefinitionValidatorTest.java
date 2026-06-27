@@ -20,7 +20,7 @@ class ActionDefinitionValidatorTest {
                 "demo",
                 false,
                 List.of(
-                        new ActionStepDefinition("send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange")
+                        new ActionStepDefinition("send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange", 3, 1000L, 5000L)
                 )
         );
 
@@ -43,13 +43,27 @@ class ActionDefinitionValidatorTest {
                 "demo",
                 false,
                 List.of(
-                        new ActionStepDefinition("notify", "SMS", "notify.user"),
-                        new ActionStepDefinition("notify", "EMAIL", "notify.email")
+                        new ActionStepDefinition("notify", "SMS", "notify.user", null, null, null),
+                        new ActionStepDefinition("notify", "EMAIL", "notify.email", null, null, null)
                 )
         );
 
         assertThatThrownBy(() -> validator.validate(definition))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("duplicate action step name");
+    }
+
+    @Test
+    void shouldRejectNegativeRetryBackoff() {
+        ActionDefinition definition = new ActionDefinition(
+                "order-cancel-flow",
+                "demo",
+                false,
+                List.of(new ActionStepDefinition("notify", "SMS", "notify.user", 1, -1L, null))
+        );
+
+        assertThatThrownBy(() -> validator.validate(definition))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("retryBackoffMillis");
     }
 }

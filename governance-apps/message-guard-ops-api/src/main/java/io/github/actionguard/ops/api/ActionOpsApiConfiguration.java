@@ -6,6 +6,7 @@ import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.core.runtime.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
@@ -72,7 +73,8 @@ public class ActionOpsApiConfiguration {
             ActionCommandValidator actionCommandValidator,
             ActionAuditService actionAuditService,
             Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
-            ActionCompensationExecutor actionCompensationExecutor
+            ActionCompensationExecutor actionCompensationExecutor,
+            ActionObservabilityService actionObservabilityService
     ) {
         return new ActionCommandService(
                 actionInstanceRepository,
@@ -81,7 +83,8 @@ public class ActionOpsApiConfiguration {
                 actionCommandValidator,
                 actionAuditService,
                 actionExecutionMessageProducer,
-                actionCompensationExecutor
+                actionCompensationExecutor,
+                actionObservabilityService
         );
     }
 }

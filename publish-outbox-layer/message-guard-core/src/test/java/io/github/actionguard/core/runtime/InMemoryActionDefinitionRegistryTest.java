@@ -19,7 +19,7 @@ class InMemoryActionDefinitionRegistryTest {
                 "order-cancel-flow",
                 "demo",
                 false,
-                List.of(new ActionStepDefinition("notify", "SMS", "notify.user"))
+                List.of(new ActionStepDefinition("notify", "SMS", "notify.user", null, null, null))
         );
         ActionDefinitionRegistry registry = new InMemoryActionDefinitionRegistry(List.of(definition), validator);
 
@@ -34,13 +34,13 @@ class InMemoryActionDefinitionRegistryTest {
                 "order-cancel-flow",
                 "demo",
                 false,
-                List.of(new ActionStepDefinition("notify-1", "SMS", "notify.user"))
+                List.of(new ActionStepDefinition("notify-1", "SMS", "notify.user", null, null, null))
         );
         ActionDefinition second = new ActionDefinition(
                 "order-cancel-flow",
                 "demo",
                 false,
-                List.of(new ActionStepDefinition("notify-2", "EMAIL", "notify.email"))
+                List.of(new ActionStepDefinition("notify-2", "EMAIL", "notify.email", null, null, null))
         );
 
         assertThatThrownBy(() -> new InMemoryActionDefinitionRegistry(List.of(first, second), validator))

@@ -41,6 +41,29 @@
         limit 1
     </select>
 
+    <select id="selectByStatusesUpdatedBefore" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        select id,
+               action_name as actionName,
+               biz_key as bizKey,
+               status,
+               current_step_index as currentStepIndex,
+               total_step_count as totalStepCount,
+               attributes_json as attributesJson,
+               last_error_code as lastErrorCode,
+               last_error_message as lastErrorMessage,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_instance
+        where status in
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+          and updated_at &lt;= #{updatedBeforeOrAt}
+        order by updated_at asc, created_at asc
+        limit #{limit}
+    </select>
+
     <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
         insert into action_instance (
             id, action_name, biz_key, status, current_step_index, total_step_count, attributes_json,

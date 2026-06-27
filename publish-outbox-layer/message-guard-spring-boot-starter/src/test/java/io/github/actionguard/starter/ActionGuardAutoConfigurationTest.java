@@ -17,6 +17,7 @@ import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.ActionDefinitionRegistry;
 import io.github.actionguard.core.runtime.StepHandlerRegistry;
+import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -237,6 +238,14 @@ class ActionGuardAutoConfigurationTest {
                     assertThat(persistedOutbox.status()).isEqualTo(ActionOutboxStatus.DEAD);
                     assertThat(persistedOutbox.attemptCount()).isEqualTo(2);
                 });
+    }
+
+    @Test
+    void shouldExposeInMemoryMetricsRecorderByDefault() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(ActionMetricsRecorder.class);
+            assertThat(context.getBean(ActionMetricsRecorder.class)).isInstanceOf(InMemoryActionMetricsRecorder.class);
+        });
     }
 
     @Configuration(proxyBeanMethods = false)

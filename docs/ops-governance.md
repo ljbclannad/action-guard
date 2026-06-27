@@ -24,7 +24,7 @@ This does **not** mean all governance semantics are fully mature.
 
 Current boundaries:
 
-- query APIs return real data from MySQL-backed runtime tables
+- query APIs return real data from runtime tables backed by the configured JDBC store
 - write operations write durable governance audit logs
 - compensation entry is wired to a real compensation runtime path
 - compensation execution is controlled by an action-level switch resolved from YAML default plus database override
@@ -366,7 +366,7 @@ Compensation log semantics:
   - `SUCCESS`
   - `FAILED`
 
-This allows governance queries and write-audit persistence to share the same MySQL store as the runtime prototype.
+This allows governance queries and write-audit persistence to share the same JDBC store as the runtime prototype, with H2 as the default demo option and MySQL as a production switch target.
 
 ## Boundaries
 

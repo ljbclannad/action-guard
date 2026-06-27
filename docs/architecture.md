@@ -304,7 +304,7 @@ The project structure should express capability domains explicitly.
 Recommended first-version adapter modules:
 
 - `action-guard-adapter-rabbitmq`: MQ publish handlers
-- `action-guard-adapter-kafka`: Kafka publish handlers
+- `action-guard-adapter-kafka`: Kafka 占位适配模块，当前不属于第一版推荐主路径
 - `action-guard-adapter-im`: IM collaboration handlers
 - `action-guard-adapter-notify`: notification handlers
 

@@ -14,15 +14,15 @@ public class InMemoryActionStepInstanceRepository implements ActionStepInstanceR
 
     @Override
     public ActionStepInstance save(ActionStepInstance stepInstance) {
-        ActionStepInstance existing = storageById.get(stepInstance.id());
-        ActionStepInstance persisted = existing == null
-                ? stepInstance
-                : withNextVersion(stepInstance, existing.version());
-        if (existing != null && existing.version() != stepInstance.version()) {
-            throw new OptimisticLockingFailureException("ActionStepInstance version conflict: " + stepInstance.id());
-        }
-        storageById.put(persisted.id(), persisted);
-        return persisted;
+        return storageById.compute(stepInstance.id(), (id, existing) -> {
+            if (existing == null) {
+                return stepInstance;
+            }
+            if (existing.version() != stepInstance.version()) {
+                throw new OptimisticLockingFailureException("ActionStepInstance version conflict: " + stepInstance.id());
+            }
+            return withNextVersion(stepInstance, existing.version());
+        });
     }
 
     @Override

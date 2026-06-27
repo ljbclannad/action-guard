@@ -5,6 +5,7 @@ import com.rabbitmq.client.Channel;
 import io.github.actionguard.api.runtime.ActionExecutionMessage;
 import io.github.actionguard.core.model.ActionConsumeDisposition;
 import io.github.actionguard.core.repository.ActionConsumeLogRepository;
+import io.github.actionguard.core.runtime.ActionObservabilityService;
 import io.github.actionguard.core.runtime.ActionExecutionCallback;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -23,6 +24,25 @@ public class RabbitMqActionExecutionConsumer {
     private final String consumerGroup;
     private final Clock clock;
     private final RabbitMqConsumeStrategy consumeStrategy;
+    private final ActionObservabilityService actionObservabilityService;
+
+    public RabbitMqActionExecutionConsumer(
+            ObjectMapper objectMapper,
+            ActionConsumeLogRepository consumeLogRepository,
+            ActionExecutionCallback callback,
+            String consumerGroup,
+            Clock clock,
+            RabbitMqConsumeStrategy consumeStrategy,
+            ActionObservabilityService actionObservabilityService
+    ) {
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.consumeLogRepository = Objects.requireNonNull(consumeLogRepository, "consumeLogRepository must not be null");
+        this.callback = Objects.requireNonNull(callback, "callback must not be null");
+        this.consumerGroup = Objects.requireNonNull(consumerGroup, "consumerGroup must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.consumeStrategy = Objects.requireNonNull(consumeStrategy, "consumeStrategy must not be null");
+        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+    }
 
     public RabbitMqActionExecutionConsumer(
             ObjectMapper objectMapper,
@@ -32,12 +52,15 @@ public class RabbitMqActionExecutionConsumer {
             Clock clock,
             RabbitMqConsumeStrategy consumeStrategy
     ) {
-        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
-        this.consumeLogRepository = Objects.requireNonNull(consumeLogRepository, "consumeLogRepository must not be null");
-        this.callback = Objects.requireNonNull(callback, "callback must not be null");
-        this.consumerGroup = Objects.requireNonNull(consumerGroup, "consumerGroup must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.consumeStrategy = Objects.requireNonNull(consumeStrategy, "consumeStrategy must not be null");
+        this(
+                objectMapper,
+                consumeLogRepository,
+                callback,
+                consumerGroup,
+                clock,
+                consumeStrategy,
+                new ActionObservabilityService(java.util.Optional.empty(), java.util.Optional.empty(), clock)
+        );
     }
 
     @RabbitListener(queues = "${action.guard.rabbitmq.queue:action.guard.execute.queue}", ackMode = "MANUAL")
@@ -46,7 +69,9 @@ public class RabbitMqActionExecutionConsumer {
         try {
             executionMessage = deserialize(message);
         } catch (IllegalStateException ex) {
-            applyDecision(message, channel, null, consumeStrategy.onDeserializationFailure(ex));
+            RabbitMqConsumeDecision decision = consumeStrategy.onDeserializationFailure(ex);
+            actionObservabilityService.deadLetter(consumerGroup, null, null, decision.reason());
+            applyDecision(message, channel, null, decision);
             return;
         }
         Instant now = clock.instant();
@@ -63,8 +88,10 @@ public class RabbitMqActionExecutionConsumer {
             RabbitMqConsumeDecision decision = consumeStrategy.onCallbackFailure(message, ex);
             if (decision.disposition() == ActionConsumeDisposition.DEAD_LETTER) {
                 consumeLogRepository.markDeadLettered(executionMessage.messageId(), consumerGroup, clock.instant(), decision.reason());
+                actionObservabilityService.deadLetter(consumerGroup, executionMessage.actionInstanceId(), executionMessage.messageId(), decision.reason());
             } else {
                 consumeLogRepository.markFailed(executionMessage.messageId(), consumerGroup, clock.instant(), decision.reason());
+                actionObservabilityService.consumeFailure(consumerGroup, executionMessage.actionInstanceId(), executionMessage.messageId(), decision.reason());
             }
             applyDecision(message, channel, executionMessage, decision);
         }

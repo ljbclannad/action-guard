@@ -25,7 +25,10 @@ public class YamlActionDefinitionLoader implements ActionDefinitionLoader {
                     .map(step -> new ActionStepDefinition(
                             String.valueOf(step.get("name")),
                             String.valueOf(step.get("stepType")),
-                            String.valueOf(step.get("target"))
+                            String.valueOf(step.get("target")),
+                            integerValue(step.get("maxRetryCount")),
+                            longValue(step.get("retryBackoffMillis")),
+                            longValue(step.get("timeoutMillis"))
                     ))
                     .toList();
             return new ActionDefinition(
@@ -45,5 +48,25 @@ public class YamlActionDefinitionLoader implements ActionDefinitionLoader {
             return classpathStream;
         }
         return new URL(location).openStream();
+    }
+
+    private Integer integerValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return Integer.valueOf(String.valueOf(value));
+    }
+
+    private Long longValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.valueOf(String.valueOf(value));
     }
 }

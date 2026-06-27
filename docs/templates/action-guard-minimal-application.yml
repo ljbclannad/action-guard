@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:file:./.data/action_guard_demo;MODE=MySQL;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+      schema-locations: classpath:db/action-guard-mysql-schema.sql
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+action:
+  guard:
+    definition-locations:
+      - classpath*:actions/*.yml
+      - classpath*:actions/*.yaml
+    publish-retry-max-attempts: 1
+    metrics-enabled: true
+    recovery:
+      enabled: true
+      batch-size: 100
+      fixed-delay: 5s
+      claim-timeout: 30s
+      compensation-timeout: 1m
+      stuck-action-timeout: 5m
+    rabbitmq:
+      exchange: action.guard.execute
+      routing-key-prefix: action.execute
+      queue: action.guard.execute.queue
+      consumer-group: action-guard-app
+
+# 如果你切换到真实 MySQL，只需要把 datasource 改回 mysql JDBC url 和账号密码。
+#
+# 如果你接入了 webhook 告警模块，可按需打开：
+# action:
+#   guard:
+#     alert:
+#       webhook:
+#         enabled: true
+#         url: https://your-webhook.example.com/action-guard

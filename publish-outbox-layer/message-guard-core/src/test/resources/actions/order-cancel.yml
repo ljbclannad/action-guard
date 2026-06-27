@@ -4,6 +4,9 @@ steps:
   - name: send-cancel-event
     stepType: MQ_MESSAGE
     target: order.cancel.exchange
+    maxRetryCount: 2
+    retryBackoffMillis: 250
+    timeoutMillis: 1000
   - name: send-user-sms
     stepType: SMS
     target: notify.user

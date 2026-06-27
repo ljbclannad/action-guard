@@ -32,6 +32,15 @@ public class ActionDefinitionValidator {
             if (step.target() == null || step.target().isBlank()) {
                 throw new IllegalArgumentException("action step target must not be blank: " + definition.name() + "/" + step.name());
             }
+            if (step.maxRetryCount() != null && step.maxRetryCount() < 0) {
+                throw new IllegalArgumentException("action step maxRetryCount must be greater than or equal to 0: " + definition.name() + "/" + step.name());
+            }
+            if (step.retryBackoffMillis() != null && step.retryBackoffMillis() < 0) {
+                throw new IllegalArgumentException("action step retryBackoffMillis must be greater than or equal to 0: " + definition.name() + "/" + step.name());
+            }
+            if (step.timeoutMillis() != null && step.timeoutMillis() <= 0) {
+                throw new IllegalArgumentException("action step timeoutMillis must be greater than 0: " + definition.name() + "/" + step.name());
+            }
             if (!stepNames.add(step.name())) {
                 throw new IllegalStateException("duplicate action step name: " + definition.name() + "/" + step.name());
             }

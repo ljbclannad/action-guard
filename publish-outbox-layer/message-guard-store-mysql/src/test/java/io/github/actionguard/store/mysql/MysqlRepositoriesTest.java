@@ -16,6 +16,7 @@ import io.github.actionguard.store.mysql.mapper.ActionStepInstanceMapper;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.boot.env.YamlPropertySourceLoader;
@@ -30,8 +31,10 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,7 +47,9 @@ class MysqlRepositoriesTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        TestMysqlConfig config = loadTestMysqlConfig();
+        Optional<TestMysqlConfig> optionalConfig = loadTestMysqlConfig();
+        Assumptions.assumeTrue(optionalConfig.isPresent(), "MySQL integration test requires TEST_MYSQL_* environment variables");
+        TestMysqlConfig config = optionalConfig.orElseThrow();
         String databaseName = "action_guard_test_" + UUID.randomUUID().toString().replace("-", "");
         DriverManagerDataSource adminDataSource = new DriverManagerDataSource();
         adminDataSource.setDriverClassName("com.mysql.cj.jdbc.Driver");
@@ -196,32 +201,46 @@ class MysqlRepositoriesTest {
         ))).isInstanceOf(org.springframework.dao.OptimisticLockingFailureException.class);
     }
 
+    @Test
+    void shouldFindRecoverableOutboxesByAvailabilityAndClaimTimeout() {
+        MysqlActionOutboxRepository repository = new MysqlActionOutboxRepository(mapper(ActionOutboxMapper.class));
+        Instant now = Instant.parse("2026-06-26T08:00:00Z");
+        repository.save(new ActionOutbox("outbox-new", "act-new", "ACTION_EXECUTE", ActionOutboxStatus.NEW, now.minusSeconds(5), 0, 0, now.minusSeconds(10), now.minusSeconds(10)));
+        repository.save(new ActionOutbox("outbox-claimed", "act-claimed", "ACTION_EXECUTE", ActionOutboxStatus.CLAIMED, now.minusSeconds(10), 1, 0, now.minusSeconds(20), now.minusSeconds(20)));
+        repository.save(new ActionOutbox("outbox-future", "act-future", "ACTION_EXECUTE", ActionOutboxStatus.NEW, now.plusSeconds(30), 0, 0, now.minusSeconds(10), now.minusSeconds(10)));
+
+        List<ActionOutbox> recoverable = repository.findRecoverable(now, now.minus(Duration.ofSeconds(10)).plusMillis(1), 10);
+
+        assertThat(recoverable)
+                .extracting(ActionOutbox::id)
+                .containsExactly("outbox-claimed", "outbox-new");
+    }
+
     private <T> T mapper(Class<T> mapperType) {
         return sqlSessionTemplate.getMapper(mapperType);
     }
 
-    private TestMysqlConfig loadTestMysqlConfig() throws IOException {
+    private Optional<TestMysqlConfig> loadTestMysqlConfig() throws IOException {
         YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
         CompositePropertySource source = new CompositePropertySource("test-config");
         loader.load("application.yaml", new ClassPathResource("application.yaml")).forEach(source::addPropertySource);
         MutablePropertySources propertySources = new MutablePropertySources();
         propertySources.addFirst(source);
         PropertySourcesPropertyResolver resolver = new PropertySourcesPropertyResolver(propertySources);
-        return new TestMysqlConfig(
-                envOrProperty("TEST_MYSQL_HOST", resolver, "spring.datasource.host"),
-                envOrProperty("TEST_MYSQL_PORT", resolver, "spring.datasource.port"),
-                envOrProperty("TEST_MYSQL_USERNAME", resolver, "spring.datasource.username"),
-                envOrProperty("TEST_MYSQL_PASSWORD", resolver, "spring.datasource.password")
-        );
+        String host = envOrProperty("TEST_MYSQL_HOST", resolver, "spring.datasource.host");
+        String port = envOrProperty("TEST_MYSQL_PORT", resolver, "spring.datasource.port");
+        String username = envOrProperty("TEST_MYSQL_USERNAME", resolver, "spring.datasource.username");
+        String password = envOrProperty("TEST_MYSQL_PASSWORD", resolver, "spring.datasource.password");
+        if (host == null || port == null || username == null || password == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new TestMysqlConfig(host, port, username, password));
     }
 
     private String envOrProperty(String envKey, PropertySourcesPropertyResolver resolver, String propertyKey) {
         String envValue = System.getenv(envKey);
         String value = envValue != null && !envValue.isBlank() ? envValue : resolver.getProperty(propertyKey);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing required config: " + propertyKey);
-        }
-        return value;
+        return value == null || value.isBlank() ? null : value;
     }
 
     private record TestMysqlConfig(String host, String port, String username, String password) {

@@ -4,6 +4,10 @@
 
 它面向这样一类业务场景：主交易流程必须保持简单，但交易完成后的副作用动作必须具备可靠性、可配置、可观测、可重试和可治理能力。
 
+当前仓库状态：`early preview`。
+
+这表示最小主链路、治理主路径和首批能力模块已经可用，但项目仍在继续收敛非主链路能力、观测接入形态和公开发布细节，不应直接理解为“完整生产级承诺”。
+
 ## 项目定位
 
 `action-guard` 不是一个通用工作流引擎。
@@ -59,19 +63,34 @@
 
 面向框架使用方：
 
-- [Definition Spec](./docs/definition-spec.md)
-- [Architecture](./docs/architecture.md)
+- [定义规范](./docs/definition-spec.md)
+- [架构设计](./docs/architecture.md)
+- [快速开始](./docs/quick-start.md)
+- [Starter 配置](./docs/starter-config.md)
+- [模块选择建议](./docs/module-selection.md)
+- [模块架构](./docs/module-architecture.md)
+- [常见问题](./docs/faq.md)
+- [可观测性说明](./docs/observability.md)
+- [兼容性与版本策略](./docs/compatibility-and-versioning.md)
+- [发布纪律](./docs/release-discipline.md)
+- [StepType 扩展指南](./docs/step-type-extension-guide.md)
 
 面向框架维护者与平台开发者：
 
-- [Data Model](./docs/data-model.md)
-- [Ops Governance](./docs/ops-governance.md)
+- [数据模型](./docs/data-model.md)
+- [治理操作](./docs/ops-governance.md)
+- [文档语言策略](./docs/documentation-language-strategy.md)
+- [公开发布准备](./docs/public-release-readiness.md)
 
-实施计划文档：
+示例配置模板：
 
-- [Action Guard Upgrade Plan](./docs/plans/2026-06-26-action-guard-upgrade.md)
+- [最小应用配置模板](./docs/templates/action-guard-minimal-application.yml)
 
-上面的计划文档是实施计划，不是框架设计的最终事实来源。
+开源协作说明：
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [SECURITY.md](./SECURITY.md)
+- [LICENSE](./LICENSE)
 
 ## 最小使用模型
 
@@ -156,29 +175,25 @@ steps:
 - `action-guard-core` 中与消息执行相关的部分
 - `action-guard-spring-boot-starter` 中与消息装配相关的部分
 
+当前版本说明：
+
+- RabbitMQ 是第一版唯一推荐的 MQ 主路径
+- Kafka 模块当前仅占位保留，不作为第一版默认接入或验证目标
+
 ## 模块映射
 
 - `action-guard-api`：公共请求模型、定义模型、SPI 契约
 - `action-guard-core`：发布 Runtime、定义加载、编排原语、消息执行协调
 - `action-guard-spring-boot-starter`：自动装配、注册表装配、Runtime 组装
 - `action-guard-adapter-rabbitmq`：RabbitMQ 消息投递与消费适配
-- `action-guard-adapter-kafka`：Kafka 消息投递与消费适配
+- `action-guard-adapter-kafka`：Kafka 占位适配模块，第一版不作为推荐接入组合
 - `action-guard-adapter-im`：IM 协作能力适配，如建群、拉群、群发消息
 - `action-guard-adapter-notify`：通知能力适配，如站内信、短信、邮件
-- `action-guard-store-mysql`：Action 和 Outbox 状态的 MySQL 持久化
+- `action-guard-store-mysql`：Action 和 Outbox 状态的 JDBC 持久化实现，当前默认演示配置走 H2，线上可切换 MySQL
 - `action-guard-store-redis`：锁、缓存与协同支持
 - `action-guard-alert-webhook`：Webhook 告警通道
 - `action-guard-ops-api`：治理后台 API
 - `action-guard-ops-web`：治理控制台应用
 - `action-guard-demo`：示例应用
 
-## 当前状态
 
-当前仓库已经具备脚手架和第一版设计文档。
-
-下一阶段的实现重点是：
-
-- Outbox 持久化
-- MQ 投递与重复消费控制
-- 第一版串行步骤 Runtime
-- 治理状态流转与人工操作能力

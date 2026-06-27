@@ -8,6 +8,8 @@ import io.github.actionguard.store.mysql.mapper.ActionOutboxRow;
 import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public class MysqlActionOutboxRepository implements ActionOutboxRepository {
@@ -45,6 +47,22 @@ public class MysqlActionOutboxRepository implements ActionOutboxRepository {
     @Override
     public Optional<ActionOutbox> findByActionInstanceId(String actionInstanceId) {
         return Optional.ofNullable(mapper.selectByActionInstanceId(actionInstanceId)).map(this::toModel);
+    }
+
+    @Override
+    public Optional<ActionOutbox> findById(String id) {
+        return Optional.ofNullable(mapper.selectById(id)).map(this::toModel);
+    }
+
+    @Override
+    public List<ActionOutbox> findRecoverable(Instant availableBeforeOrAt, Instant claimedBeforeOrAt, int limit) {
+        return mapper.selectRecoverable(
+                        Timestamp.from(availableBeforeOrAt),
+                        Timestamp.from(claimedBeforeOrAt),
+                        limit
+                ).stream()
+                .map(this::toModel)
+                .toList();
     }
 
     private ActionOutboxRow toRow(ActionOutbox outbox) {

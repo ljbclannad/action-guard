@@ -1,6 +1,6 @@
 package io.github.actionguard.alert.webhook;
 
-import io.github.actionguard.api.runtime.ActionAlertLevel;
+import io.github.actionguard.api.runtime.ActionAlertEvent;
 import io.github.actionguard.api.spi.ActionAlertPublisher;
 import org.springframework.web.client.RestClient;
 
@@ -15,14 +15,36 @@ public class WebhookActionAlertPublisher implements ActionAlertPublisher {
     }
 
     @Override
-    public void publish(ActionAlertLevel level, String title, String message) {
+    public void publish(ActionAlertEvent event) {
         restClient.post()
                 .uri(webhookUrl)
-                .body(new AlertPayload(level.name(), title, message))
+                .body(new AlertPayload(
+                        event.type().name(),
+                        event.level().name(),
+                        event.title(),
+                        event.message(),
+                        event.actionName(),
+                        event.actionInstanceId(),
+                        event.stepName(),
+                        event.stepType(),
+                        event.occurredAt() == null ? null : event.occurredAt().toString(),
+                        event.details()
+                ))
                 .retrieve()
                 .toBodilessEntity();
     }
 
-    record AlertPayload(String level, String title, String message) {
+    record AlertPayload(
+            String type,
+            String level,
+            String title,
+            String message,
+            String actionName,
+            String actionInstanceId,
+            String stepName,
+            String stepType,
+            String occurredAt,
+            java.util.Map<String, String> details
+    ) {
     }
 }

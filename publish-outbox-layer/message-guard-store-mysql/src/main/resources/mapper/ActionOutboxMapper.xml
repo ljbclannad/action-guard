@@ -54,4 +54,21 @@
         limit 1
     </select>
 
+    <select id="selectRecoverable" resultType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
+        select id,
+               action_instance_id as actionInstanceId,
+               topic,
+               status,
+               available_at as availableAt,
+               attempt_count as attemptCount,
+               version,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from action_outbox
+        where (status = 'NEW' and available_at &lt;= #{availableBeforeOrAt})
+           or (status = 'CLAIMED' and updated_at &lt;= #{claimedBeforeOrAt})
+        order by available_at asc, created_at asc
+        limit #{limit}
+    </select>
+
 </mapper>

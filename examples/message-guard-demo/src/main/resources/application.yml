@@ -1,18 +1,21 @@
 spring:
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DEMO_MYSQL_HOST:localhost}:${DEMO_MYSQL_PORT:3306}/${DEMO_MYSQL_DATABASE:action_guard_demo}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: ${DEMO_MYSQL_USERNAME:root}
-    password: ${DEMO_MYSQL_PASSWORD:root}
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:file:${DEMO_H2_PATH:${user.home}/.action-guard/demo-db/action_guard_demo};MODE=MySQL;AUTO_SERVER=TRUE
+    username: ${DEMO_H2_USERNAME:sa}
+    password: ${DEMO_H2_PASSWORD:}
     hikari:
       pool-name: action-guard-demo-hikari
-      minimum-idle: ${DEMO_MYSQL_POOL_MIN_IDLE:2}
-      maximum-pool-size: ${DEMO_MYSQL_POOL_MAX_SIZE:10}
-      idle-timeout: ${DEMO_MYSQL_POOL_IDLE_TIMEOUT_MS:300000}
-      max-lifetime: ${DEMO_MYSQL_POOL_MAX_LIFETIME_MS:1800000}
-      connection-timeout: ${DEMO_MYSQL_POOL_CONNECTION_TIMEOUT_MS:30000}
-      validation-timeout: ${DEMO_MYSQL_POOL_VALIDATION_TIMEOUT_MS:5000}
+      minimum-idle: ${DEMO_DB_POOL_MIN_IDLE:2}
+      maximum-pool-size: ${DEMO_DB_POOL_MAX_SIZE:10}
+      idle-timeout: ${DEMO_DB_POOL_IDLE_TIMEOUT_MS:300000}
+      max-lifetime: ${DEMO_DB_POOL_MAX_LIFETIME_MS:1800000}
+      connection-timeout: ${DEMO_DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DEMO_DB_POOL_VALIDATION_TIMEOUT_MS:5000}
       auto-commit: true
   sql:
     init:
@@ -34,3 +37,7 @@ action:
       routing-key-prefix: action.execute
       queue: action.guard.execute.queue
       consumer-group: action-guard-demo
+
+demo:
+  runner:
+    enabled: ${DEMO_RUNNER_ENABLED:true}
