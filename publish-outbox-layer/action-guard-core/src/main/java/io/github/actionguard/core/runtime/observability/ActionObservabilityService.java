@@ -33,6 +33,7 @@ public class ActionObservabilityService {
     }
 
     public void retryExhausted(ActionInstance actionInstance, ActionStepInstance stepInstance, String errorCode, String errorMessage) {
+        // 告警事件和指标在同一个入口里发出，避免调用方到处散落“先记指标、再发告警”的重复逻辑。
         Map<String, String> details = new LinkedHashMap<>();
         details.put("bizKey", nullSafe(actionInstance.bizKey()));
         details.put("stepIndex", String.valueOf(stepInstance.stepIndex()));
@@ -219,6 +220,7 @@ public class ActionObservabilityService {
             String stepType,
             Map<String, String> details
     ) {
+        // 告警发布是可选能力，缺少 publisher 不应影响主链路执行，所以这里统一通过 Optional 降级。
         actionAlertPublisher.ifPresent(publisher -> publisher.publish(new ActionAlertEvent(
                 type,
                 level,
@@ -242,6 +244,7 @@ public class ActionObservabilityService {
     }
 
     private void increment(String metricName, Map<String, String> tags) {
+        // 指标同样允许缺省，以便框架在没有接入外部监控系统时仍能独立运行。
         actionMetricsRecorder.ifPresent(recorder -> recorder.increment(metricName, tags));
     }
 

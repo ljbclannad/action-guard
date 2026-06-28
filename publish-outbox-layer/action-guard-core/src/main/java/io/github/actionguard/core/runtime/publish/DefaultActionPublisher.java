@@ -22,6 +22,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Action 发布主链路的默认实现。
+ *
+ * <p>它处在“业务请求 -> Action 运行时”的入口位置，职责非常收敛：
+ * 根据 actionName 读取已注册的 {@link ActionDefinition}，生成一条动作实例、
+ * 多条步骤实例，以及一条用于驱动后续执行的 outbox 记录，并在同一事务语义下完成持久化。
+ *
+ * <p>这个类不直接执行任何 step，也不关心 MQ 细节。后续真正的投递与执行会由
+ * starter 层包装器、outbox recovery 链路和 {@code ActionExecutionCallback} 继续推进。
+ * 这样发布路径只负责“可靠落库”，把主交易提交和异步执行解耦开。
+ */
 public class DefaultActionPublisher implements ActionPublisher {
 
     private static final String ACTION_EXECUTE_TOPIC = "ACTION_EXECUTE";
@@ -54,6 +65,8 @@ public class DefaultActionPublisher implements ActionPublisher {
         Instant now = clock.instant();
         String actionInstanceId = UUID.randomUUID().toString();
 
+        // 发布主路径只负责在同一事务里落库，不直接执行后续 step。
+        // 这样可以保证主交易提交成功时，动作实例、步骤实例和 outbox 记录要么一起成功，要么一起回滚。
         ActionInstance actionInstance = new ActionInstance(
                 actionInstanceId,
                 definition.name(),
@@ -81,6 +94,7 @@ public class DefaultActionPublisher implements ActionPublisher {
                 now
         );
 
+        // 保持固定写入顺序，便于后续排查主链路问题时从 action -> step -> outbox 顺着追踪。
         actionInstanceRepository.save(actionInstance);
         actionStepInstanceRepository.saveAll(stepInstances);
         actionOutboxRepository.save(outbox);
@@ -117,6 +131,7 @@ public class DefaultActionPublisher implements ActionPublisher {
             List<Map<String, Object>> requestStepPayloads,
             Instant now
     ) {
+        // step 实例以定义文件中的顺序固化下来，后续 runtime 只按 stepIndex 严格串行推进。
         return java.util.stream.IntStream.range(0, steps.size())
                 .mapToObj(index -> {
                     ActionStepDefinition step = steps.get(index);

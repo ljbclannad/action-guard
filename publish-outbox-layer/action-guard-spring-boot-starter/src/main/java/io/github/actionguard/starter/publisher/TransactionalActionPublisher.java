@@ -68,6 +68,8 @@ public class TransactionalActionPublisher implements ActionPublisher {
         }
         ActionOutbox outbox = resolveOutbox(request);
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 事务存在时一定要等提交成功后再真正投递 MQ。
+            // 否则会出现“消息已经发出，但主事务回滚”的经典脏消息问题。
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
@@ -96,6 +98,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
                 markOutbox(currentOutbox, ActionOutboxStatus.DONE, currentOutbox.attemptCount());
                 return;
             } catch (RuntimeException ex) {
+                // 这里的 retry 只覆盖“事务已提交后的 MQ 投递失败”窗口，用于缩短消息滞留在 outbox 的时间。
                 lastFailure = ex;
                 int nextAttemptCount = attempt;
                 ActionOutboxStatus nextStatus = attempt >= publishRetryMaxAttempts ? ActionOutboxStatus.DEAD : ActionOutboxStatus.NEW;
@@ -109,6 +112,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
     }
 
     private ActionOutbox markOutbox(ActionOutbox outbox, ActionOutboxStatus status, int attemptCount) {
+        // 发布后只更新 outbox，自身不再改 action / step，保持“执行状态”和“投递状态”两个维度解耦。
         Instant now = Instant.now();
         return actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),

@@ -27,6 +27,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * Action 执行回调的核心协调实现。
+ *
+ * <p>它处在“执行消息到达 -> 推进 action 状态机”的中心位置：消费侧拿到一条
+ * {@code ActionExecutionMessage} 后，最终会调用这里，根据当前 action / step 状态、
+ * step 定义和 handler 执行结果，决定下一步是成功推进、立即重试、延迟重试还是失败终止。
+ *
+ * <p>这个类串起了定义注册表、step handler 注册表、重试策略、outbox 以及可观测性服务，
+ * 是 runtime 最核心的状态推进器。它本身不负责消息中间件接入；MQ 适配器只负责把消息送到这里。
+ */
 public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
     private final ActionInstanceRepository actionInstanceRepository;
@@ -88,6 +98,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     public void execute(ActionExecutionMessage message) {
         ActionInstance actionInstance = actionInstanceRepository.findById(message.actionInstanceId())
                 .orElseThrow(() -> new IllegalArgumentException("ActionInstance not found: " + message.actionInstanceId()));
+        // 终态动作天然幂等，重复投递的执行消息在这里直接短路，避免重复推进状态。
         if (actionInstance.status().isTerminal()) {
             return;
         }
@@ -100,6 +111,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         }
 
         ActionStepInstance currentStep = stepInstances.get(actionInstance.currentStepIndex());
+        // 当前 step 已成功时直接返回，防止消费重复消息时再次执行同一个 handler。
         if (currentStep.status() == ActionStepStatus.SUCCESS) {
             return;
         }
@@ -127,6 +139,8 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
     private void handleStepSuccess(ActionInstance actionInstance, ActionStepInstance currentStep) {
         Instant now = clock.instant();
+        // 先把 step 标记为成功，再推进 action 状态。
+        // 这样即使后续推进下一步失败，治理侧也能明确看到当前 step 已经完成。
         actionStepInstanceRepository.save(new ActionStepInstance(
                 currentStep.id(),
                 currentStep.actionInstanceId(),
@@ -165,6 +179,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             actionObservabilityService.actionSucceeded(advanced, currentStep);
         }
         if (nextStatus == ActionStatus.DISPATCHING) {
+            // 只有在还有后续 step 时才继续投递下一条执行消息，第一版始终保持严格串行。
             dispatchNextStep(advanced, now);
         }
     }
@@ -177,6 +192,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     ) {
         Instant now = clock.instant();
         String errorMessage = normalizedErrorMessage(result);
+        // 失败先落到 step 实例，后续 retry / fail-fast / compensate 的决策都基于这次持久化结果。
         ActionStepInstance failedStep = actionStepInstanceRepository.save(new ActionStepInstance(
                 currentStep.id(),
                 currentStep.actionInstanceId(),
@@ -203,6 +219,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         }
         actionObservabilityService.stepFailed(actionInstance, failedStep, result.errorCode());
         if (retryAction == ActionRetryAction.IMMEDIATE_RETRY || retryAction == ActionRetryAction.DELAY_RETRY) {
+            // retry 不会创建新的 action，而是把同一个 action 重新置为 RETRYING，并复用原 outbox 重新调度。
             ActionInstance retrying = actionInstanceRepository.save(new ActionInstance(
                     actionInstance.id(),
                     actionInstance.actionName(),
@@ -220,6 +237,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             dispatchRetry(retrying, now.plusMillis(resolvedBackoffMillis(stepDefinition, retryAction)));
             return;
         }
+        // 走到这里说明当前策略已经放弃继续执行，action 进入 FAILED，等待人工治理或补偿链路接管。
         actionInstanceRepository.save(new ActionInstance(
                 actionInstance.id(),
                 actionInstance.actionName(),
@@ -255,6 +273,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private void dispatchOutbox(String actionInstanceId, Instant availableAt, boolean incrementAttemptCount) {
         ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
                 .orElseThrow(() -> new IllegalStateException("Outbox not found for actionInstanceId: " + actionInstanceId));
+        // 下一步执行和重试都复用同一条 outbox，只更新可执行时间和尝试次数，避免额外制造重复消息。
         ActionOutbox scheduledOutbox = actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),
                 outbox.actionInstanceId(),
@@ -269,10 +288,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         if (actionExecutionMessageProducer.isEmpty() || availableAt.isAfter(clock.instant())) {
             return;
         }
+        // 只有“立即可执行”的消息才在当前线程直接尝试投递；延迟重试交给 recovery/scheduler 再次扫描。
         publishImmediately(scheduledOutbox);
     }
 
     private void publishImmediately(ActionOutbox outbox) {
+        // 先把 outbox claim 成 CLAIMED，再真正 publish，避免多个节点同时把同一条消息重复发到 MQ。
         ActionOutbox claimedOutbox = actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),
                 outbox.actionInstanceId(),
@@ -298,6 +319,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                     clock.instant()
             ));
         } catch (RuntimeException ex) {
+            // 发送失败时把 outbox 还原回 NEW，交给后续恢复任务重试，而不是在这里静默丢失。
             ActionOutbox reset = actionOutboxRepository.save(new ActionOutbox(
                     claimedOutbox.id(),
                     claimedOutbox.actionInstanceId(),

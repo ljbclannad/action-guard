@@ -52,6 +52,28 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Action Guard starter 的核心自动配置入口。
+ *
+ * <p>整体装配流程如下：
+ * <ol>
+ *     <li>业务应用（例如 action-guard-demo）在 pom 中依赖 {@code action-guard-spring-boot-starter}。</li>
+ *     <li>Spring Boot 启动时，通过 {@code @SpringBootApplication} 启用自动配置。</li>
+ *     <li>Spring Boot 从
+ *     {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}
+ *     读取到当前类，并将其导入应用上下文。</li>
+ *     <li>当前类通过 {@link EnableConfigurationProperties} 触发
+ *     {@link ActionGuardProperties} 绑定，将 {@code action.guard.*} 配置读入内存。</li>
+ *     <li>随后创建 Action Guard 运行时所需的核心 Bean，例如 definition registry、
+ *     publisher、execution callback、recovery service 以及默认的内存仓储实现。</li>
+ *     <li>demo 或业务应用可以继续声明自己的 {@code @Configuration} / {@code @Bean}，
+ *     补充 MQ 拓扑、具体适配器 Bean，或者用自定义实现覆盖这里标注了
+ *     {@code @ConditionalOnMissingBean} 的默认 Bean。</li>
+ * </ol>
+ *
+ * <p>因此，这个类本身不需要在 demo 中显式 {@code @Import}；只要 starter 在 classpath 上，
+ * Spring Boot 就会自动完成发现、配置绑定和 Bean 装配。
+ */
 @AutoConfiguration
 @EnableConfigurationProperties(ActionGuardProperties.class)
 public class ActionGuardAutoConfiguration {
@@ -67,6 +89,7 @@ public class ActionGuardAutoConfiguration {
             ActionObservabilityService actionObservabilityService,
             ActionGuardProperties properties
     ) {
+        // 对外暴露的是带事务语义的发布器；真正的落库动作仍由 core 的 DefaultActionPublisher 完成。
         return new TransactionalActionPublisher(new DefaultActionPublisher(
                 definitionRegistry,
                 actionInstanceRepository,
@@ -92,6 +115,7 @@ public class ActionGuardAutoConfiguration {
             ActionDefinitionValidator validator,
             ActionGuardProperties properties
     ) {
+        // definition 在启动时一次性加载进内存，运行期只读，简化执行链路中的查找与校验成本。
         return new InMemoryActionDefinitionRegistry(loadDefinitions(loader, properties), validator);
     }
 
@@ -114,6 +138,7 @@ public class ActionGuardAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ActionMetricsRecorder actionMetricsRecorder(ActionGuardProperties properties) {
+        // 没有接入外部 metrics 时默认提供一个内存实现，既方便测试，也避免运行期空指针判断散落各处。
         return properties.isMetricsEnabled() ? new InMemoryActionMetricsRecorder() : (metricName, tags) -> { };
     }
 
@@ -203,6 +228,7 @@ public class ActionGuardAutoConfiguration {
             ActionObservabilityService actionObservabilityService,
             Clock clock
     ) {
+        // 执行回调是 runtime 的核心协调点：消费 MQ 消息后，最终都会落到这里推进 step 状态机。
         return new DefaultActionExecutionCallback(
                 actionInstanceRepository,
                 actionStepInstanceRepository,
@@ -263,6 +289,7 @@ public class ActionGuardAutoConfiguration {
         List<ActionDefinition> definitions = new ArrayList<>();
         for (String locationPattern : properties.getDefinitionLocations()) {
             try {
+                // 支持多个 location pattern，是为了让框架定义和业务定义可以并存，而不是只能从单一路径加载。
                 Resource[] resources = resolver.getResources(locationPattern);
                 for (Resource resource : resources) {
                     definitions.add(loader.load(resource.getURL().toString()));

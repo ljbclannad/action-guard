@@ -92,6 +92,7 @@ public class ActionCompensationService implements ActionCompensationExecutor {
             throw new IllegalStateException("compensation is disabled for action: " + actionInstance.actionName());
         }
 
+        // 人工或自动触发补偿时，先把动作抢占到 COMPENSATING，避免多个节点同时补偿同一条 action。
         executeCompensation(claimCompensating(actionInstance), false);
     }
 
@@ -100,6 +101,7 @@ public class ActionCompensationService implements ActionCompensationExecutor {
             return 0;
         }
         Instant threshold = clock.instant().minus(staleTimeout);
+        // 这里只接管“已经在补偿中，但长时间没有推进”的动作，避免误伤正常执行中的动作。
         List<ActionInstance> candidates = actionInstanceRepository.findByStatusesAndUpdatedBefore(
                 List.of(ActionStatus.COMPENSATING),
                 threshold,
@@ -144,9 +146,11 @@ public class ActionCompensationService implements ActionCompensationExecutor {
                 .toList();
         String compensationBatchId = compensationBatchId(actionInstance.id());
 
+        // 补偿严格按“成功步骤倒序”执行，尽量符合副作用回滚的自然顺序。
         for (ActionStepInstance step : successfulSteps) {
             ActionCompensator compensator = actionCompensatorRegistry.find(step.stepType()).orElse(null);
             if (compensator == null) {
+                // 没有 compensator 时不阻断整条补偿链，而是记一条 SKIPPED 审计，方便后续人工判断。
                 writeCompensationLog(compensationBatchId, step, "SKIPPED", null, "no compensator registered");
                 continue;
             }
@@ -158,6 +162,7 @@ public class ActionCompensationService implements ActionCompensationExecutor {
                     step.payload()
             ));
             if (!result.success()) {
+                // 一旦某个补偿步骤失败，当前动作回到 DEAD，等待人工介入，而不是继续补偿剩余步骤。
                 writeCompensationLog(compensationBatchId, step, "FAILED", compensator.getClass().getName(), result.message());
                 actionObservabilityService.compensationFailed(actionInstance, step, result.message());
                 actionInstanceRepository.save(new ActionInstance(
@@ -200,6 +205,7 @@ public class ActionCompensationService implements ActionCompensationExecutor {
         if (!recoveryMode) {
             return Set.of();
         }
+        // 恢复补偿时只跳过已成功或已明确跳过的步骤，避免重放已经完成的补偿动作。
         return actionCompensationLogRepository.findByActionInstanceId(actionInstanceId).stream()
                 .filter(log -> "SUCCESS".equals(log.compensationStatus()) || "SKIPPED".equals(log.compensationStatus()))
                 .map(ActionCompensationLog::actionStepInstanceId)
