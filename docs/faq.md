@@ -6,7 +6,7 @@
 
 当前仓库默认演示路径已经切到 H2 file 模式：
 
-- `examples/message-guard-demo` 默认使用 H2
+- `examples/action-guard-demo` 默认使用 H2
 - `action-guard-store-mysql` 默认示例配置也使用 H2
 
 如果你要接近生产部署，再把 datasource 切换到 MySQL 即可。
@@ -106,8 +106,8 @@ bash scripts/run-demo-stability.sh
 
 建议顺序：
 
-1. [Quick Start](/Users/lejinbo/LLM/message-guard/docs/quick-start.md)
-2. [Starter Config](/Users/lejinbo/LLM/message-guard/docs/starter-config.md)
-3. [Module Selection](/Users/lejinbo/LLM/message-guard/docs/module-selection.md)
-4. [Module Architecture](/Users/lejinbo/LLM/message-guard/docs/module-architecture.md)
-5. [Definition Spec](/Users/lejinbo/LLM/message-guard/docs/definition-spec.md)
+1. [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+2. [Starter Config](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
+3. [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+4. [Module Architecture](/Users/lejinbo/LLM/action-guard/docs/module-architecture.md)
+5. [Definition Spec](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)

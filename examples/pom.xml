@@ -13,6 +13,6 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>message-guard-demo</module>
+    <module>action-guard-demo</module>
   </modules>
 </project>

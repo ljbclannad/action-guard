@@ -10,8 +10,8 @@
 
 如果你还没看过运行时原理，建议先读：
 
-- [Architecture](/Users/lejinbo/LLM/message-guard/docs/architecture.md)
-- [Quick Start](/Users/lejinbo/LLM/message-guard/docs/quick-start.md)
+- [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+- [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
 
 ## Module View
 
@@ -27,7 +27,7 @@ flowchart LR
     Starter --> Alert["action-guard-alert-webhook"]
     Store --> DB["H2 file DB or MySQL"]
     MQ --> Rabbit["RabbitMQ"]
-    Core --> Ops["message-guard-ops-api"]
+    Core --> Ops["action-guard-ops-api"]
 ```
 
 ## Minimal Demo Composition
@@ -127,7 +127,7 @@ flowchart LR
 
 负责把标准化告警事件投递到外部 webhook。
 
-### `message-guard-ops-api`
+### `action-guard-ops-api`
 
 负责治理查询与人工操作：
 
@@ -140,14 +140,14 @@ flowchart LR
 
 如果你是第一次接入，建议顺序：
 
-1. [Quick Start](/Users/lejinbo/LLM/message-guard/docs/quick-start.md)
-2. [Starter Config](/Users/lejinbo/LLM/message-guard/docs/starter-config.md)
-3. [Module Selection](/Users/lejinbo/LLM/message-guard/docs/module-selection.md)
-4. [Module Architecture](/Users/lejinbo/LLM/message-guard/docs/module-architecture.md)
-5. [Definition Spec](/Users/lejinbo/LLM/message-guard/docs/definition-spec.md)
+1. [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+2. [Starter Config](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
+3. [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+4. [Module Architecture](/Users/lejinbo/LLM/action-guard/docs/module-architecture.md)
+5. [Definition Spec](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
 
 如果你要扩展能力模块，接着看：
 
-1. [Architecture](/Users/lejinbo/LLM/message-guard/docs/architecture.md)
-2. [StepType Extension Guide](/Users/lejinbo/LLM/message-guard/docs/step-type-extension-guide.md)
-3. [Ops Governance](/Users/lejinbo/LLM/message-guard/docs/ops-governance.md)
+1. [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+2. [StepType Extension Guide](/Users/lejinbo/LLM/action-guard/docs/step-type-extension-guide.md)
+3. [Ops Governance](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)

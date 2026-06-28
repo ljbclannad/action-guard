@@ -13,7 +13,7 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>message-guard-adapter-rabbitmq</module>
-    <module>message-guard-adapter-kafka</module>
+    <module>action-guard-adapter-rabbitmq</module>
+    <module>action-guard-adapter-kafka</module>
   </modules>
 </project>

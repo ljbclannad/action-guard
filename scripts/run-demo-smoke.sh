@@ -14,10 +14,10 @@ echo "log file: $LOG_FILE"
 cd "$ROOT_DIR"
 
 if [[ "${ACTION_GUARD_SMOKE_BUILD_FIRST:-true}" == "true" ]]; then
-  mvn -q -pl examples/message-guard-demo -am compile
+  mvn -q -pl examples/action-guard-demo -am compile
 fi
 
-mvn -q -f examples/message-guard-demo/pom.xml spring-boot:run >"$LOG_FILE" 2>&1
+mvn -q -f examples/action-guard-demo/pom.xml spring-boot:run >"$LOG_FILE" 2>&1
 
 if grep -q "status=SUCCESS" "$LOG_FILE"; then
   echo "demo smoke success"

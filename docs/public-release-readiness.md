@@ -68,7 +68,7 @@
 
 至少要保证一个默认示例可以被陌生开发者按文档运行：
 
-- `examples/message-guard-demo`
+- `examples/action-guard-demo`
 - `scripts/run-demo-smoke.sh`
 
 切 public 前，应该以全新视角验证一次：

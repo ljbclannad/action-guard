@@ -13,7 +13,7 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>message-guard-ops-api</module>
-    <module>message-guard-ops-web</module>
+    <module>action-guard-ops-api</module>
+    <module>action-guard-ops-web</module>
   </modules>
 </project>

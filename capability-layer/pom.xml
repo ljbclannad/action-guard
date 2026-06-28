@@ -13,8 +13,8 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>message-guard-alert-webhook</module>
-    <module>message-guard-adapter-notify</module>
-    <module>message-guard-adapter-im</module>
+    <module>action-guard-alert-webhook</module>
+    <module>action-guard-adapter-notify</module>
+    <module>action-guard-adapter-im</module>
   </modules>
 </project>

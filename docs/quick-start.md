@@ -54,11 +54,11 @@
 
 可以直接从模板复制：
 
-- [action-guard-minimal-application.yml](/Users/lejinbo/LLM/message-guard/docs/templates/action-guard-minimal-application.yml)
+- [action-guard-minimal-application.yml](/Users/lejinbo/LLM/action-guard/docs/templates/action-guard-minimal-application.yml)
 
 starter 默认配置说明见：
 
-- [Starter Config](/Users/lejinbo/LLM/message-guard/docs/starter-config.md)
+- [Starter Config](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
 
 ## 4. Add One Action Definition
 
@@ -134,6 +134,6 @@ actionPublisher.publish(new ActionRequest(
 
 下一步建议：
 
-- [Module Selection](/Users/lejinbo/LLM/message-guard/docs/module-selection.md)
-- [Definition Spec](/Users/lejinbo/LLM/message-guard/docs/definition-spec.md)
-- [Ops Governance](/Users/lejinbo/LLM/message-guard/docs/ops-governance.md)
+- [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+- [Definition Spec](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
+- [Ops Governance](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)

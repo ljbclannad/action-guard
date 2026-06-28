@@ -7,7 +7,7 @@
 - H2 文件库，无需额外安装数据库
 - RabbitMQ 3.x，开启 AMQP 5672 端口
 
-默认值来自 [application.yml](/Users/lejinbo/LLM/message-guard/examples/message-guard-demo/src/main/resources/application.yml:1)：
+默认值来自 [application.yml](/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/src/main/resources/application.yml:1)：
 
 - H2 数据文件: `${user.home}/.action-guard/demo-db/action_guard_demo`
 - H2 用户名: `sa`
@@ -27,13 +27,13 @@
 先构建依赖模块：
 
 ```bash
-mvn -pl examples/message-guard-demo -am install -DskipTests
+mvn -pl examples/action-guard-demo -am install -DskipTests
 ```
 
 再启动 demo：
 
 ```bash
-mvn -f examples/message-guard-demo/pom.xml spring-boot:run
+mvn -f examples/action-guard-demo/pom.xml spring-boot:run
 ```
 
 ## 最小冒烟验证

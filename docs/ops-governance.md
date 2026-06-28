@@ -8,7 +8,7 @@ If asynchronous side effects can fail, repeat, compensate, or stall, operators n
 
 ## Current Status
 
-The governance layer now has a real backend API in `message-guard-ops-api` for:
+The governance layer now has a real backend API in `action-guard-ops-api` for:
 
 - action list query
 - action detail query
@@ -46,7 +46,7 @@ Current boundaries:
 
 The ops layer should provide these first-version views.
 
-These views are now implemented at API level in `message-guard-ops-api`.
+These views are now implemented at API level in `action-guard-ops-api`.
 
 ### Action List
 

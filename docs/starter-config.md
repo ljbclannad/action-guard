@@ -50,7 +50,7 @@
 
 完整指标语义见：
 
-- [可观测性说明](/Users/lejinbo/LLM/message-guard/docs/observability.md)
+- [可观测性说明](/Users/lejinbo/LLM/action-guard/docs/observability.md)
 
 ## Recovery Properties
 
@@ -113,6 +113,6 @@
 
 推荐同时参考：
 
-- [Quick Start](/Users/lejinbo/LLM/message-guard/docs/quick-start.md)
-- [Module Selection](/Users/lejinbo/LLM/message-guard/docs/module-selection.md)
-- [Template Application YAML](/Users/lejinbo/LLM/message-guard/docs/templates/action-guard-minimal-application.yml)
+- [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+- [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+- [Template Application YAML](/Users/lejinbo/LLM/action-guard/docs/templates/action-guard-minimal-application.yml)

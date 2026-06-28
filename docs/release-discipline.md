@@ -76,7 +76,7 @@
 
 如果对外发布模块版本，建议：
 
-- 同步发布 parent 与 `message-guard-bom`
+- 同步发布 parent 与 `action-guard-bom`
 - 保持推荐主路径模块版本一致
 - 不要让接入方自己拼核心模块版本组合
 

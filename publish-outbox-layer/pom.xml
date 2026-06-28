@@ -13,10 +13,10 @@
   <packaging>pom</packaging>
 
   <modules>
-    <module>message-guard-api</module>
-    <module>message-guard-core</module>
-    <module>message-guard-spring-boot-starter</module>
-    <module>message-guard-store-mysql</module>
-    <module>message-guard-store-redis</module>
+    <module>action-guard-api</module>
+    <module>action-guard-core</module>
+    <module>action-guard-spring-boot-starter</module>
+    <module>action-guard-store-mysql</module>
+    <module>action-guard-store-redis</module>
   </modules>
 </project>

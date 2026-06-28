@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEMO_POM="$ROOT_DIR/examples/message-guard-demo/pom.xml"
+DEMO_POM="$ROOT_DIR/examples/action-guard-demo/pom.xml"
 LOG_ROOT="${ACTION_GUARD_STABILITY_LOG_DIR:-$ROOT_DIR/.tmp/action-guard-stability}"
 RUNS="${ACTION_GUARD_STABILITY_RUNS:-10}"
 PARALLELISM="${ACTION_GUARD_STABILITY_PARALLELISM:-3}"
@@ -29,7 +29,7 @@ echo "demo database mode: H2 file (override with DEMO_H2_PATH if needed)"
 
 if [ "$BUILD_FIRST" = "true" ]; then
   echo "building demo dependencies once before burst run..."
-  mvn -q -pl examples/message-guard-demo -am -DskipTests compile -f "$ROOT_DIR/pom.xml"
+  mvn -q -pl examples/action-guard-demo -am -DskipTests compile -f "$ROOT_DIR/pom.xml"
 fi
 
 run_one() {

@@ -88,7 +88,7 @@
 
 ## 5. BOM Release Strategy
 
-`message-guard-bom` 的目标是让接入方统一版本，而不是自己拼每个模块的版本号。
+`action-guard-bom` 的目标是让接入方统一版本，而不是自己拼每个模块的版本号。
 
 当前建议策略：
 

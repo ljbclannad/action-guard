@@ -34,7 +34,7 @@
 - `OUTBOX_PUBLISH_FAILED`
 - `ACTION_STUCK`
 
-如果引入 `message-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*`，这些事件会被直接投递到外部 webhook。
+如果引入 `action-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*`，这些事件会被直接投递到外部 webhook。
 
 ## 当前内建 metrics
 

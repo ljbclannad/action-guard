@@ -16,13 +16,13 @@
 
 建议先阅读：
 
-1. [README.md](/Users/lejinbo/LLM/message-guard/README.md)
-2. [Architecture](/Users/lejinbo/LLM/message-guard/docs/architecture.md)
-3. [Quick Start](/Users/lejinbo/LLM/message-guard/docs/quick-start.md)
-4. [Observability](/Users/lejinbo/LLM/message-guard/docs/observability.md)
-5. [Compatibility And Versioning](/Users/lejinbo/LLM/message-guard/docs/compatibility-and-versioning.md)
-6. [Public Release Readiness](/Users/lejinbo/LLM/message-guard/docs/public-release-readiness.md)
-7. [Release Discipline](/Users/lejinbo/LLM/message-guard/docs/release-discipline.md)
+1. [README.md](/Users/lejinbo/LLM/action-guard/README.md)
+2. [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+3. [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+4. [Observability](/Users/lejinbo/LLM/action-guard/docs/observability.md)
+5. [Compatibility And Versioning](/Users/lejinbo/LLM/action-guard/docs/compatibility-and-versioning.md)
+6. [Public Release Readiness](/Users/lejinbo/LLM/action-guard/docs/public-release-readiness.md)
+7. [Release Discipline](/Users/lejinbo/LLM/action-guard/docs/release-discipline.md)
 
 ## Development Principles
 
@@ -85,4 +85,4 @@ bash scripts/run-demo-stability.sh
 
 如果问题涉及潜在安全风险，请优先参考：
 
-- [SECURITY.md](/Users/lejinbo/LLM/message-guard/SECURITY.md)
+- [SECURITY.md](/Users/lejinbo/LLM/action-guard/SECURITY.md)

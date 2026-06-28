@@ -12,7 +12,7 @@
   <description>Open-source ready outbox-backed async action orchestration framework.</description>
 
   <modules>
-    <module>message-guard-bom</module>
+    <module>action-guard-bom</module>
     <module>capability-layer</module>
     <module>publish-outbox-layer</module>
     <module>message-execution-layer</module>
