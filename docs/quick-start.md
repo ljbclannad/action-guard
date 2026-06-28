@@ -1,6 +1,6 @@
-# Quick Start
+# 快速开始
 
-## Goal
+## 目标
 
 这份文档面向第一次接入 `action-guard` 的 Spring Boot 3 应用，目标是让你用最少的步骤跑通一条真实链路：
 
@@ -10,7 +10,7 @@
 - 消费并执行 step
 - 最终进入 `SUCCESS`
 
-## 1. Add Dependencies
+## 1. 添加依赖
 
 最小可运行组合建议：
 
@@ -33,7 +33,7 @@
 
 如果你的 action 需要短信、邮件、IM 等能力，再按需追加能力模块。
 
-## 2. Prepare Infrastructure
+## 2. 准备基础设施
 
 当前最小主链路需要：
 
@@ -50,7 +50,7 @@
 - `spring.datasource.*`
 - `spring.rabbitmq.*`
 
-## 3. Add Application Config
+## 3. 添加应用配置
 
 可以直接从模板复制：
 
@@ -58,9 +58,9 @@
 
 starter 默认配置说明见：
 
-- [Starter Config](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
+- [Starter 配置说明](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
 
-## 4. Add One Action Definition
+## 4. 添加一个 Action 定义
 
 在 `src/main/resources/actions/` 下新增一个 YAML，例如：
 
@@ -73,7 +73,7 @@ steps:
     target: mock-sms
 ```
 
-## 5. Provide Step Handlers Or Capability Adapters
+## 5. 提供 Step Handler 或能力适配模块
 
 `action-guard` 不会凭空执行业务副作用。
 
@@ -101,7 +101,7 @@ NotifySmsSender mockSmsSender() {
 }
 ```
 
-## 6. Publish An Action
+## 6. 发布一个 Action
 
 业务侧最小调用方式：
 
@@ -114,7 +114,7 @@ actionPublisher.publish(new ActionRequest(
 ));
 ```
 
-## 7. Validate Result
+## 7. 验证结果
 
 最小成功标准：
 
@@ -124,7 +124,7 @@ actionPublisher.publish(new ActionRequest(
 - MQ consumer 成功执行 step
 - 最终 `action_instance.status = SUCCESS`
 
-## Common Paths
+## 常见接入组合
 
 最常见的三种组合：
 
@@ -134,6 +134,6 @@ actionPublisher.publish(new ActionRequest(
 
 下一步建议：
 
-- [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
-- [Definition Spec](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
-- [Ops Governance](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)
+- [模块选择建议](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+- [定义规范](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
+- [治理操作](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)

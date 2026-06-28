@@ -1,6 +1,6 @@
-# Contributing
+# 贡献指南
 
-## Goal
+## 目标
 
 欢迎一起完善 `action-guard`。
 
@@ -12,19 +12,19 @@
 - 文档可读性
 - 测试覆盖
 
-## Before You Start
+## 开始之前
 
 建议先阅读：
 
 1. [README.md](/Users/lejinbo/LLM/action-guard/README.md)
-2. [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
-3. [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
-4. [Observability](/Users/lejinbo/LLM/action-guard/docs/observability.md)
-5. [Compatibility And Versioning](/Users/lejinbo/LLM/action-guard/docs/compatibility-and-versioning.md)
-6. [Public Release Readiness](/Users/lejinbo/LLM/action-guard/docs/public-release-readiness.md)
-7. [Release Discipline](/Users/lejinbo/LLM/action-guard/docs/release-discipline.md)
+2. [架构设计](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+3. [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+4. [可观测性说明](/Users/lejinbo/LLM/action-guard/docs/observability.md)
+5. [兼容性与版本策略](/Users/lejinbo/LLM/action-guard/docs/compatibility-and-versioning.md)
+6. [公开发布准备](/Users/lejinbo/LLM/action-guard/docs/public-release-readiness.md)
+7. [发布纪律](/Users/lejinbo/LLM/action-guard/docs/release-discipline.md)
 
-## Development Principles
+## 开发原则
 
 提交改动前，请尽量遵守这些原则：
 
@@ -34,7 +34,7 @@
 - 新功能尽量带上最小测试和文档
 - 默认演示路径优先保证 H2 + RabbitMQ 可运行
 
-## Typical Workflow
+## 典型流程
 
 1. Fork 仓库并创建功能分支
 2. 补充或修改代码
@@ -43,7 +43,7 @@
 5. 运行本地验证
 6. 提交 PR，并说明变更动机、行为变化和验证方式
 
-## Suggested Local Checks
+## 建议的本地检查
 
 最少建议运行：
 
@@ -63,7 +63,7 @@ bash scripts/run-demo-smoke.sh
 bash scripts/run-demo-stability.sh
 ```
 
-## Pull Request Checklist
+## Pull Request 检查清单
 
 - [ ] 变更目标清晰
 - [ ] 没有引入与任务无关的重构
@@ -72,7 +72,7 @@ bash scripts/run-demo-stability.sh
 - [ ] 如果有默认行为变化，已明确写出影响
 - [ ] 如果有兼容性风险，已写出迁移建议
 
-## Issues And Design Discussion
+## Issue 与设计讨论
 
 如果你准备提交较大的改动，建议先说明：
 

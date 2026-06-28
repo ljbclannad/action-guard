@@ -1,6 +1,6 @@
-# Module Architecture
+# 模块架构
 
-## Goal
+## 目标
 
 这份文档从“模块怎么拼起来”而不是“运行时原理”出发，帮助接入方快速理解：
 
@@ -10,10 +10,10 @@
 
 如果你还没看过运行时原理，建议先读：
 
-- [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
-- [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+- [架构设计](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+- [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
 
-## Module View
+## 模块视图
 
 ```mermaid
 flowchart LR
@@ -30,7 +30,7 @@ flowchart LR
     Core --> Ops["action-guard-ops-api"]
 ```
 
-## Minimal Demo Composition
+## 最小演示组合
 
 本地最小闭环建议：
 
@@ -46,7 +46,7 @@ flowchart LR
 
 这是仓库当前默认演示路径。
 
-## Production-Oriented Composition
+## 面向生产的组合方式
 
 如果你准备接近真实生产接入，建议：
 
@@ -57,7 +57,7 @@ flowchart LR
 
 这样可以在不改业务编排模型的前提下，从演示环境平滑切到真实数据库。
 
-## Module Responsibilities
+## 模块职责
 
 ### `action-guard-api`
 
@@ -65,7 +65,7 @@ flowchart LR
 
 - `ActionRequest`
 - `ActionExecutionMessage`
-- definition model
+- 定义模型
 - handler SPI / sender SPI
 
 ### `action-guard-core`
@@ -102,8 +102,8 @@ flowchart LR
 
 负责 MQ 适配：
 
-- outbox message publish
-- message consume
+- outbox 消息发布
+- 消息消费
 - 重复消费保护对接
 - dead-letter / consume-failure 事件接入
 
@@ -131,23 +131,23 @@ flowchart LR
 
 负责治理查询与人工操作：
 
-- action query
-- detail query
+- Action 查询
+- 详情查询
 - retry / skip / cancel / compensate
 - audit log query
 
-## Recommended Reading Order
+## 推荐阅读顺序
 
 如果你是第一次接入，建议顺序：
 
-1. [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
-2. [Starter Config](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
-3. [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
-4. [Module Architecture](/Users/lejinbo/LLM/action-guard/docs/module-architecture.md)
-5. [Definition Spec](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
+1. [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+2. [Starter 配置说明](/Users/lejinbo/LLM/action-guard/docs/starter-config.md)
+3. [模块选择建议](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+4. [模块架构](/Users/lejinbo/LLM/action-guard/docs/module-architecture.md)
+5. [定义规范](/Users/lejinbo/LLM/action-guard/docs/definition-spec.md)
 
 如果你要扩展能力模块，接着看：
 
-1. [Architecture](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
-2. [StepType Extension Guide](/Users/lejinbo/LLM/action-guard/docs/step-type-extension-guide.md)
-3. [Ops Governance](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)
+1. [架构设计](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
+2. [StepType 扩展指南](/Users/lejinbo/LLM/action-guard/docs/step-type-extension-guide.md)
+3. [治理操作](/Users/lejinbo/LLM/action-guard/docs/ops-governance.md)

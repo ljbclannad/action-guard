@@ -1,10 +1,10 @@
-# Module Selection
+# 模块选择建议
 
-## Purpose
+## 目的
 
 这份文档帮助接入方快速判断应该引入哪些模块，而不是一开始把所有模块都带上。
 
-## Minimal Closed Loop
+## 最小闭环
 
 如果你的目标只是跑通最小真实主链路，建议：
 
@@ -17,7 +17,7 @@
 - `action-guard-adapter-notify`
 - 或业务自己实现 `ActionStepHandler`
 
-## If You Need Notify
+## 如果你需要通知能力
 
 通知能力建议增加：
 
@@ -29,7 +29,7 @@
 - `NOTIFY_SMS_SEND`
 - `NOTIFY_EMAIL_SEND`
 
-## If You Need IM Collaboration
+## 如果你需要 IM 协作能力
 
 IM 能力建议增加：
 
@@ -41,19 +41,19 @@ IM 能力建议增加：
 - `IM_GROUP_INVITE`
 - `IM_GROUP_MESSAGE_SEND`
 
-## If You Need Governance APIs
+## 如果你需要治理 API
 
 如果你要查询 action、查看步骤、执行 retry/skip/cancel/compensate，建议再引入：
 
 - `action-guard-ops-api`
 
-## If You Need Alert Delivery
+## 如果你需要告警投递
 
 如果你要把告警推到外部系统，建议增加：
 
 - `action-guard-alert-webhook`
 
-## If You Need Custom Business Steps
+## 如果你需要自定义业务步骤
 
 如果你的步骤不是 IM / Notify 这种通用能力，而是业务自定义动作：
 
@@ -63,7 +63,7 @@ IM 能力建议增加：
 
 这是第一版最推荐的扩展方式。
 
-## Current Non-Recommendation
+## 当前不推荐默认引入的模块
 
 当前阶段不建议默认引入：
 

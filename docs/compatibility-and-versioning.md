@@ -1,16 +1,16 @@
-# Compatibility And Versioning
+# 兼容性与版本策略
 
-## Goal
+## 目标
 
 这份文档回答 P2 阶段最容易影响开源接入体验的几个问题：
 
-- Definition Version 怎么理解
+- Definition Version 应该如何理解
 - 升级时哪些兼容性需要优先保证
 - 数据库表结构怎么演进
 - `stepType` 扩展时怎样避免破坏兼容
 - BOM 准备怎么管理
 
-## 1. Definition Version Behavior
+## 1. Definition Version 行为
 
 当前规则：
 
@@ -25,7 +25,7 @@
 - 对已有线上流程做破坏性修改时，优先新增 definition 名或保留旧定义并灰度切流
 - 不要在已有运行中 Action 尚未收敛时，直接替换旧 definition 的关键步骤语义
 
-## 2. Upgrade Compatibility Strategy
+## 2. 升级兼容策略
 
 升级兼容优先级建议：
 
@@ -46,7 +46,7 @@
 - 提供迁移说明
 - 尽量避免与普通功能增强混发
 
-## 3. Database Schema Evolution Strategy
+## 3. 数据库 Schema 演进策略
 
 当前数据库表演进建议：
 
@@ -68,7 +68,7 @@
 
 - 新增 DDL 尽量保持 H2 MySQL mode 与 MySQL 双侧可执行
 
-## 4. StepType Compatibility Strategy
+## 4. StepType 兼容策略
 
 `stepType` 一旦被外部 YAML 使用，就应视为公开契约的一部分。
 
@@ -86,7 +86,7 @@
 
 这能最大限度降低 provider 迁移对 YAML 的影响。
 
-## 5. BOM Release Strategy
+## 5. BOM 发布策略
 
 `action-guard-bom` 的目标是让接入方统一版本，而不是自己拼每个模块的版本号。
 
@@ -108,7 +108,7 @@
 - `action-guard-alert-webhook`
 - `action-guard-ops-api`
 
-## 6. Current Compatibility Baseline
+## 6. 当前兼容性基线
 
 当前建议把以下内容视为优先稳定边界：
 
@@ -119,11 +119,11 @@
 - optimistic locking 的 `version` 语义
 - recovery 与 compensation 的核心状态流转
 
-## 7. Recommended Release Discipline
+## 7. 推荐发布纪律
 
 对外发布前建议至少检查：
 
-1. Quick Start 是否仍可跑通
+1. 快速开始是否仍可跑通
 2. demo 默认链路是否仍可运行
 3. Starter 默认配置项是否有新增或默认值变化
 4. schema 是否出现破坏性修改
@@ -132,6 +132,6 @@
 如果上面任一项发生变化，应该同步更新：
 
 - README
-- Quick Start
-- Starter Config
+- 快速开始
+- Starter 配置说明
 - 兼容性说明或 release note

@@ -1,4 +1,4 @@
-# Public Release Readiness
+# 公开发布准备
 
 ## 目标
 
@@ -27,7 +27,7 @@
 1. 检查 `.gitignore` 与工作区，确认私有开发辅助文件未进入提交面
 2. 运行一次最小测试或定向测试，确认仓库不是失效状态
 3. 运行 demo 冒烟脚本，确认陌生开发者能跑通最小链路
-4. 检查 README、Quick Start、FAQ、Module Selection 是否与当前实现一致
+4. 检查 README、快速开始、FAQ、模块选择建议 是否与当前实现一致
 5. 明确 README 中的成熟度表述，例如“early preview”
 6. 检查非主链路模块声明是否清晰，例如 Kafka、Redis、ops-web
 7. 最后再切换仓库可见性，并补充 issue / PR 基础模板

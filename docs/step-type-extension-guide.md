@@ -1,6 +1,6 @@
-# StepType Extension Guide
+# StepType 扩展指南
 
-## Goal
+## 目标
 
 这份文档面向要扩展 `action-guard` 能力的人，回答三个问题：
 
@@ -8,7 +8,7 @@
 2. 新增后要提供哪些代码和配置
 3. 怎么保证它能被 runtime 正确加载、执行和治理
 
-## When To Add A New `stepType`
+## 什么时候应该新增一个 `stepType`
 
 适合新增 `stepType` 的场景：
 
@@ -22,7 +22,7 @@
 - 还没有稳定的输入输出边界
 - 更适合直接在业务应用里写一个 `ActionStepHandler`
 
-## Current Design Rule
+## 当前设计规则
 
 当前仓库采用两层路由：
 
@@ -40,7 +40,7 @@ steps:
 
 这里 runtime 先通过 `stepType=NOTIFY_SMS_SEND` 找到通知能力处理器，再通过 `target=mock-sms` 找到真正的 provider。
 
-## Recommended Extension Path
+## 推荐扩展路径
 
 推荐顺序：
 
@@ -48,7 +48,7 @@ steps:
 2. 如果是通用能力模块，新增 adapter 模块和 sender/provider SPI
 3. 如果只是业务自定义步骤，直接在业务应用里实现 `ActionStepHandler`
 
-## Path A: Add A Generic Capability Module
+## 路径 A：新增一个通用能力模块
 
 以新的通知/协作类能力为例，推荐包含这些部分。
 
@@ -56,7 +56,7 @@ steps:
 
 命名建议：
 
-- 大写下划线风格
+- 使用大写下划线风格
 - 动作语义清晰
 - 尽量稳定，不把 provider 名写进 `stepType`
 
@@ -91,16 +91,16 @@ Handler 负责：
 
 ### 4. 提供 provider SPI
 
-建议像现有 notify / im 模块一样，provider 必须暴露：
+建议像现有 notify / im 模块一样，provider 至少暴露：
 
 - `provider()`
 - 一个执行方法，例如 `send(...)`、`create(...)`、`invite(...)`
 
-这样 starter 能在启动时把多个 provider 收集进 registry。
+这样 starter 才能在启动时把多个 provider 收集进 registry。
 
 ### 5. 注册到 Spring
 
-模块内需要提供：
+模块内通常需要提供：
 
 - auto-configuration
 - handler bean
@@ -108,7 +108,7 @@ Handler 负责：
 
 业务应用侧只需要实现 provider Bean，即可被自动发现。
 
-## Path B: Add A Business-Local Step
+## 路径 B：新增一个业务本地 Step
 
 如果你的步骤只服务于当前业务系统，最小方式是直接实现 `ActionStepHandler`：
 
@@ -134,7 +134,7 @@ class SyncOrderLabelStepHandler implements ActionStepHandler {
 - 暂时不打算抽象成共享模块
 - 业务语义强于平台语义
 
-## YAML Design Recommendations
+## YAML 设计建议
 
 新增 `stepType` 后，建议同步约束 YAML 写法：
 
@@ -154,7 +154,7 @@ steps:
       tagCode: cancelled
 ```
 
-## Retry / Timeout / Compensation Considerations
+## 重试 / 超时 / 补偿设计考虑
 
 如果一个新 `stepType` 会进入生产使用，至少要明确：
 
@@ -170,7 +170,7 @@ steps:
 - handler 侧只返回清晰的成功 / 可重试失败 / 不可重试失败
 - 补偿逻辑单独建 compensator，不把正向和逆向逻辑混在一起
 
-## Governance Visibility Requirements
+## 治理可见性要求
 
 一个可上线的 `stepType`，至少应该保证治理侧能看到：
 
@@ -185,7 +185,7 @@ steps:
 - provider-level error code mapping
 - 对关键失败场景的 alert event details
 
-## Testing Recommendations
+## 测试建议
 
 最少建议覆盖：
 
@@ -196,7 +196,7 @@ steps:
 5. terminal failure 会进入失败或补偿
 6. 重复执行不会产生不可接受的双重副作用
 
-## Checklist
+## 自查清单
 
 新增一个 `stepType` 前，建议自查：
 

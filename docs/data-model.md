@@ -1,14 +1,14 @@
-# Data Model
+# 数据模型
 
-## Goal
+## 目标
 
-The data model must make the framework recoverable, governable, and cluster-safe.
+数据模型必须让框架具备可恢复、可治理和集群安全的能力。
 
-Every state transition that matters operationally must be durable and queryable.
+凡是对运维和治理有意义的状态流转，都必须可持久化、可查询。
 
-## Core Tables
+## 核心表
 
-The first version should standardize four core tables:
+第一版建议标准化以下核心表：
 
 - `action_instance`
 - `action_step_instance`
@@ -16,164 +16,164 @@ The first version should standardize four core tables:
 - `action_audit_log`
 - `action_consume_log`
 
-Optional supporting tables may be added later for definition registry caching, alert delivery records, or operator identities.
+后续可以按需补充辅助表，例如定义注册表缓存、告警投递记录或操作员身份信息表。
 
 ## action_instance
 
-Represents one published action execution.
+表示一次已发布的 Action 执行实例。
 
-Suggested fields:
+建议字段：
 
 | Field | Purpose |
 | --- | --- |
-| `id` | primary key |
-| `action_name` | definition name |
-| `definition_version` | resolved definition version |
-| `biz_key` | business identity |
-| `status` | current action status |
-| `current_step_index` | zero-based current step pointer |
-| `total_step_count` | copied from definition for query efficiency |
-| `retrying_step_index` | current retrying step when applicable |
-| `attributes_json` | action input attributes |
-| `idempotency_key` | publish deduplication key |
-| `compensation_status` | current compensation phase |
-| `next_run_at` | next schedulable execution time |
-| `last_error_code` | normalized failure classification |
-| `last_error_message` | summarized failure reason |
-| `created_at` | creation timestamp |
-| `updated_at` | last state update timestamp |
-| `finished_at` | terminal completion timestamp |
+| `id` | 主键 |
+| `action_name` | 定义名 |
+| `definition_version` | 已解析的定义版本 |
+| `biz_key` | 业务主键 |
+| `status` | 当前 Action 状态 |
+| `current_step_index` | 从 0 开始的当前步骤指针 |
+| `total_step_count` | 从定义复制来的总步骤数，便于查询 |
+| `retrying_step_index` | 当前正在重试的步骤索引 |
+| `attributes_json` | Action 输入属性 |
+| `idempotency_key` | 发布去重 key |
+| `compensation_status` | 当前补偿阶段 |
+| `next_run_at` | 下次可调度执行时间 |
+| `last_error_code` | 标准化失败分类 |
+| `last_error_message` | 失败原因摘要 |
+| `created_at` | 创建时间 |
+| `updated_at` | 最近一次状态更新时间 |
+| `finished_at` | 进入终态的时间 |
 
-Indexes:
+索引建议：
 
-- unique index on `idempotency_key` when action-level deduplication is enabled
-- query index on `(status, next_run_at)`
-- query index on `(action_name, biz_key)`
-- query index on `created_at`
+- 在启用 Action 级去重时，对 `idempotency_key` 建唯一索引
+- 对 `(status, next_run_at)` 建查询索引
+- 对 `(action_name, biz_key)` 建查询索引
+- 对 `created_at` 建查询索引
 
 ## action_step_instance
 
-Represents durable execution state for each step of an action.
+表示一个 Action 中每个 Step 的持久化执行状态。
 
-Suggested fields:
+建议字段：
 
 | Field | Purpose |
 | --- | --- |
-| `id` | primary key |
-| `action_instance_id` | owning action |
-| `step_index` | serial order index |
-| `step_name` | step identifier |
-| `step_type` | handler type |
-| `target` | handler target |
-| `status` | current step status |
-| `attempt_count` | total forward attempts |
-| `max_attempts` | copied resolved retry policy |
-| `next_run_at` | next retry time |
-| `timeout_ms` | resolved timeout |
-| `idempotency_key` | resolved step idempotency key |
-| `request_payload_json` | rendered request snapshot |
-| `response_payload_json` | optional result snapshot |
-| `last_error_code` | normalized failure classification |
-| `last_error_message` | summarized failure reason |
-| `started_at` | current or first start time |
-| `finished_at` | final completion time |
-| `updated_at` | last mutation timestamp |
+| `id` | 主键 |
+| `action_instance_id` | 所属 Action |
+| `step_index` | 串行顺序索引 |
+| `step_name` | 步骤标识 |
+| `step_type` | Handler 类型 |
+| `target` | Handler 目标 |
+| `status` | 当前 Step 状态 |
+| `attempt_count` | 正向执行总尝试次数 |
+| `max_attempts` | 已解析后的最大重试次数 |
+| `next_run_at` | 下次重试时间 |
+| `timeout_ms` | 已解析后的超时时间 |
+| `idempotency_key` | 已解析后的 Step 幂等 key |
+| `request_payload_json` | 渲染后的请求快照 |
+| `response_payload_json` | 可选的结果快照 |
+| `last_error_code` | 标准化失败分类 |
+| `last_error_message` | 失败原因摘要 |
+| `started_at` | 当前或首次启动时间 |
+| `finished_at` | 最终完成时间 |
+| `updated_at` | 最近一次变更时间 |
 
-Indexes:
+索引建议：
 
-- unique index on `(action_instance_id, step_index)`
-- query index on `(status, next_run_at)`
-- query index on `idempotency_key`
+- 对 `(action_instance_id, step_index)` 建唯一索引
+- 对 `(status, next_run_at)` 建查询索引
+- 对 `idempotency_key` 建查询索引
 
 ## action_outbox
 
-Represents dispatchable runtime work.
+表示可派发的运行时任务。
 
-This table is the durable bridge between business commit and async execution.
+这张表是业务提交与异步执行之间的持久化桥梁。
 
-Suggested fields:
+建议字段：
 
 | Field | Purpose |
 | --- | --- |
-| `id` | primary key |
-| `action_instance_id` | owning action |
-| `topic` | logical work type such as `ACTION_EXECUTE` or `ACTION_COMPENSATE` |
-| `status` | `NEW`, `CLAIMED`, `DONE`, `DEAD` |
-| `available_at` | earliest dispatch time |
-| `lease_owner` | worker or node identity |
-| `lease_expires_at` | claim expiration |
-| `attempt_count` | dispatch attempts |
-| `last_error_message` | dispatcher-level failure reason |
-| `created_at` | creation timestamp |
-| `updated_at` | last mutation timestamp |
+| `id` | 主键 |
+| `action_instance_id` | 所属 Action |
+| `topic` | 逻辑任务类型，例如 `ACTION_EXECUTE` 或 `ACTION_COMPENSATE` |
+| `status` | `NEW`、`CLAIMED`、`DONE`、`DEAD` |
+| `available_at` | 最早可派发时间 |
+| `lease_owner` | worker 或节点标识 |
+| `lease_expires_at` | claim 过期时间 |
+| `attempt_count` | 派发尝试次数 |
+| `last_error_message` | dispatcher 层失败原因 |
+| `created_at` | 创建时间 |
+| `updated_at` | 最近一次变更时间 |
 
-Indexes:
+索引建议：
 
-- query index on `(status, available_at)`
-- query index on `(lease_expires_at)`
-- query index on `action_instance_id`
+- 对 `(status, available_at)` 建查询索引
+- 对 `lease_expires_at` 建查询索引
+- 对 `action_instance_id` 建查询索引
 
-Rules:
+规则：
 
-- inserting `action_outbox` must occur in the same transaction as `action_instance`
-- a claimed row is safe to re-claim after lease expiry
-- `DONE` means the dispatcher-side work item has been durably consumed, not necessarily that the action has fully succeeded
+- 插入 `action_outbox` 必须与 `action_instance` 在同一事务中完成
+- 已被 claim 的记录在 lease 过期后应允许重新 claim
+- `DONE` 表示 dispatcher 侧的工作项已被可靠消费，不等于整个 Action 已经成功完成
 
 ## action_consume_log
 
-Represents message-layer consumption state for execution messages.
+表示执行消息在消息层的消费状态。
 
-This table exists to make repeated consumption explicit and governable.
+这张表的存在，是为了让重复消费行为显式可见、可治理。
 
-Suggested fields:
+建议字段：
 
 | Field | Purpose |
 | --- | --- |
-| `id` | primary key |
-| `message_id` | stable MQ execution message id |
-| `action_instance_id` | owning action |
-| `step_instance_id` | optional step reference |
-| `consumer_group` | logical consumer identity |
-| `consume_status` | `RECEIVED`, `EXECUTING`, `ACKED`, `DUPLICATE_SKIPPED`, `FAILED`, `DEAD_LETTERED` |
-| `dedupe_key` | repeated-consumption fence key |
-| `attempt_count` | consumer-side redelivery count |
-| `last_error_message` | last consume failure reason |
-| `first_received_at` | first delivery time |
-| `last_received_at` | most recent delivery time |
-| `updated_at` | last mutation timestamp |
+| `id` | 主键 |
+| `message_id` | 稳定的 MQ 执行消息 id |
+| `action_instance_id` | 所属 Action |
+| `step_instance_id` | 可选的 Step 引用 |
+| `consumer_group` | 逻辑消费者标识 |
+| `consume_status` | `RECEIVED`、`EXECUTING`、`ACKED`、`DUPLICATE_SKIPPED`、`FAILED`、`DEAD_LETTERED` |
+| `dedupe_key` | 重复消费 fencing key |
+| `attempt_count` | consumer 侧重投次数 |
+| `last_error_message` | 最近一次消费失败原因 |
+| `first_received_at` | 首次收到消息时间 |
+| `last_received_at` | 最近一次收到消息时间 |
+| `updated_at` | 最近一次变更时间 |
 
-Indexes:
+索引建议：
 
-- unique index on `message_id`
-- query index on `(consume_status, last_received_at)`
-- query index on `action_instance_id`
-- query index on `dedupe_key`
+- 对 `message_id` 建唯一索引
+- 对 `(consume_status, last_received_at)` 建查询索引
+- 对 `action_instance_id` 建查询索引
+- 对 `dedupe_key` 建查询索引
 
-Rules:
+规则：
 
-- one execution message must have one stable `message_id`
-- duplicate deliveries update consume history rather than creating invisible behavior
-- `DUPLICATE_SKIPPED` should be queryable for diagnostics
+- 一条执行消息必须拥有稳定的 `message_id`
+- 重复投递应更新消费历史，而不是形成“看不见的重复行为”
+- `DUPLICATE_SKIPPED` 必须可查询，以支持问题诊断
 
 ## action_audit_log
 
-Records governance-significant events.
+表示治理意义上的审计事件。
 
-Suggested fields:
+建议字段：
 
 | Field | Purpose |
 | --- | --- |
-| `id` | primary key |
-| `action_instance_id` | owning action |
-| `step_instance_id` | optional associated step |
-| `event_type` | event category |
-| `event_source` | `SYSTEM`, `OPERATOR`, `DISPATCHER`, `RUNTIME` |
-| `operator_id` | optional human operator |
-| `message` | human-readable summary |
-| `details_json` | structured event payload |
-| `created_at` | event timestamp |
+| `id` | 主键 |
+| `action_instance_id` | 所属 Action |
+| `step_instance_id` | 可选的关联 Step |
+| `event_type` | 事件类别 |
+| `event_source` | `SYSTEM`、`OPERATOR`、`DISPATCHER`、`RUNTIME` |
+| `operator_id` | 可选的人类操作员标识 |
+| `message` | 可读摘要 |
+| `details_json` | 结构化事件载荷 |
+| `created_at` | 事件时间 |
 
-Typical events:
+典型事件：
 
 - published
 - claimed
@@ -191,11 +191,11 @@ Typical events:
 - operator_skip
 - operator_cancel
 
-## State Transition Constraints
+## 状态流转约束
 
-`action_instance.status` should transition only through well-defined paths.
+`action_instance.status` 应只允许沿着明确的路径流转。
 
-Examples:
+示例：
 
 - `PENDING -> DISPATCHING`
 - `DISPATCHING -> SUCCESS`
@@ -207,11 +207,11 @@ Examples:
 - `COMPENSATING -> COMPENSATED`
 - `COMPENSATING -> WAITING_MANUAL`
 
-The schema alone does not enforce all transitions, but the runtime and governance APIs must.
+仅靠 schema 本身无法完全约束这些路径，但运行时和治理 API 必须做到这一点。
 
-## Message Consumption State Constraints
+## 消息消费状态约束
 
-`action_consume_log.consume_status` should follow bounded transitions such as:
+`action_consume_log.consume_status` 应遵循有边界的状态流转，例如：
 
 - `RECEIVED -> EXECUTING`
 - `EXECUTING -> ACKED`
@@ -220,32 +220,32 @@ The schema alone does not enforce all transitions, but the runtime and governanc
 - `FAILED -> RECEIVED`
 - `FAILED -> DEAD_LETTERED`
 
-The message layer must not acknowledge a message as successful until the runtime result and consume state are durably recorded.
+在运行时结果和消费状态没有可靠落库之前，消息层不能把消息当作成功消费而提前 ack。
 
-## Definition Persistence Strategy
+## 定义持久化策略
 
-The first version may choose one of two modes:
+第一版可以接受两种模式：
 
-- file-backed definitions with resolved version copied to runtime tables
-- persistent definition registry table introduced later
+- 采用文件定义，并把已解析版本复制到运行时表中
+- 之后再引入持久化定义注册表
 
-For the initial slice, file-backed definitions are acceptable if:
+对于初始版本，只要满足以下条件，文件定义就是可接受的：
 
-- action instance stores the resolved definition version
-- rendered step metadata is snapshotted into `action_step_instance`
-- running instances do not depend on mutating YAML files
+- Action 实例会存储已解析的 definition version
+- 渲染后的 Step 元数据会快照到 `action_step_instance`
+- 运行中的实例不依赖可变的 YAML 文件内容
 
-## Retention And Archival
+## 保留与归档
 
-Recommended lifecycle:
+建议生命周期：
 
-- active tables retain recent operational data
-- completed historical rows are archived by time window
-- audit logs are retained longer than hot outbox rows
+- 活跃表保留近期运维数据
+- 已完成的历史记录按时间窗口归档
+- 审计日志的保留时间应长于热点 outbox 数据
 
-The archival process must preserve the ability to answer:
+归档流程至少要保留以下问题的可追溯能力：
 
-- what action ran
-- what steps executed
-- why it failed or compensated
-- what operator actions were taken
+- 当时运行了哪个 Action
+- 实际执行了哪些步骤
+- 为什么失败或进入补偿
+- 执行过哪些人工操作

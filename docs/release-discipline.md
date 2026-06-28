@@ -1,4 +1,4 @@
-# Release Discipline
+# 发布纪律
 
 ## 目标
 

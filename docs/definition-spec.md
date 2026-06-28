@@ -1,25 +1,25 @@
-# Definition Spec
+# 定义规范
 
-## Purpose
+## 目的
 
-This document defines the first-version action definition DSL for `action-guard`.
+这份文档定义了 `action-guard` 第一版的 Action 定义 DSL。
 
-The DSL is intentionally constrained:
+这套 DSL 是有意收敛过的：
 
-- one action definition describes one business side-effect flow
-- steps execute only in serial order
-- reliability and governance are more important than workflow expressiveness
+- 一个 Action 定义描述一条业务副作用流程
+- Step 只按串行顺序执行
+- 可靠性与治理能力优先于工作流表达能力
 
-## Definition Shape
+## 定义结构
 
-An action definition contains:
+一个 Action 定义包含：
 
-- action metadata
-- execution policy defaults
-- an ordered list of step definitions
-- optional alert and compensation behavior
+- Action 元数据
+- 执行策略默认值
+- 有序的 Step 定义列表
+- 可选的告警与补偿行为
 
-Example:
+示例：
 
 ```yaml
 name: order-cancel-flow
@@ -65,47 +65,47 @@ steps:
         delay: 30s
 ```
 
-## Action Fields
+## Action 字段
 
-### Required
+### 必填字段
 
-- `name`: globally unique action definition name
-- `steps`: ordered non-empty step list
+- `name`：全局唯一的 Action 定义名
+- `steps`：有序且非空的 Step 列表
 
-### Optional
+### 可选字段
 
-- `description`: human-readable description
-- `version`: definition version for rollout control
-- `enabled`: whether new publishes may use this definition
-- `defaults`: default retry and timeout policy
-- `idempotency`: action-level idempotency policy
-- `alerts`: action-level alert policy
+- `description`：可读描述
+- `version`：用于灰度与发布控制的定义版本
+- `enabled`：是否允许新的 publish 使用该定义
+- `defaults`：默认重试与超时策略
+- `idempotency`：Action 级幂等策略
+- `alerts`：Action 级告警策略
 
-## Action Idempotency
+## Action 幂等
 
-Action-level idempotency prevents duplicate publish requests from creating duplicate executable actions.
+Action 级幂等用于防止重复发布请求生成多份可执行 Action。
 
-Fields:
+字段：
 
-- `scope`: `ACTION` or `DEFINITION_VERSION`
-- `keyTemplate`: expression resolved from request context
+- `scope`：`ACTION` 或 `DEFINITION_VERSION`
+- `keyTemplate`：从请求上下文解析出的表达式
 
-Recommended first-version behavior:
+推荐的第一版行为：
 
-- duplicate publish with same resolved key returns the existing action instance identity
-- duplicate publish must not create another active outbox row
+- 如果重复发布请求解析出相同的幂等 key，应返回已有的 Action 实例标识
+- 重复发布不得再创建新的活跃 outbox 记录
 
-## Step Definition
+## Step 定义
 
-Each step is executed exactly in list order.
+每个 Step 都严格按列表顺序执行。
 
-Required fields:
+必填字段：
 
-- `name`: unique within the action
-- `stepType`: handler type
-- `target`: handler-specific destination or identifier
+- `name`：在当前 Action 内唯一
+- `stepType`：Handler 类型
+- `target`：Handler 侧使用的目标标识或路由目标
 
-Optional fields:
+可选字段：
 
 - `description`
 - `retry`
@@ -117,9 +117,9 @@ Optional fields:
 - `compensation`
 - `alerts`
 
-## Step Types
+## StepType
 
-The first version should standardize a small built-in set:
+第一版建议内建一小组标准化的 `stepType`：
 
 - `HTTP_CALL`
 - `MQ_MESSAGE`
@@ -132,57 +132,57 @@ The first version should standardize a small built-in set:
 - `NOTIFY_SMS_SEND`
 - `NOTIFY_EMAIL_SEND`
 
-Adapters may contribute additional types, but the runtime contract remains the same.
+适配模块可以扩展新的类型，但运行时契约应保持一致。
 
-## Step Type Registration
+## StepType 注册
 
-`stepType` is not just a label in YAML. It is the lookup key used by the runtime to find the actual step executor.
+`stepType` 不只是 YAML 里的一个标签，它还是运行时查找真正执行器的 key。
 
-Registration rules:
+注册规则：
 
-- each `stepType` must map to exactly one active handler
-- handlers may be provided by framework modules or business modules
-- duplicate registrations for the same `stepType` must fail startup
-- unresolved `stepType` must fail validation before runtime execution when possible
+- 每个 `stepType` 必须恰好映射到一个活跃 handler
+- handler 可以由框架模块提供，也可以由业务模块提供
+- 同一个 `stepType` 的重复注册必须导致启动失败
+- 对于无法解析的 `stepType`，应尽可能在运行前校验阶段直接失败
 
-Example module ownership:
+模块归属示例：
 
-- `MQ_MESSAGE` -> RabbitMQ adapter module
-- `KAFKA_MESSAGE` -> Kafka adapter module（模块占位保留，第一版不作为推荐接入路径）
-- `IM_GROUP_CREATE` -> IM adapter module
-- `IM_GROUP_INVITE` -> IM adapter module
-- `IM_GROUP_MESSAGE_SEND` -> IM adapter module
-- `NOTIFY_IN_APP_SEND` -> notification adapter module
-- `NOTIFY_SMS_SEND` -> notification adapter module
-- `NOTIFY_EMAIL_SEND` -> notification adapter module
-- `BEAN_INVOKE` -> local application module
+- `MQ_MESSAGE` -> RabbitMQ 适配模块
+- `KAFKA_MESSAGE` -> Kafka 适配模块（当前模块仍是占位保留，第一版不作为推荐接入路径）
+- `IM_GROUP_CREATE` -> IM 适配模块
+- `IM_GROUP_INVITE` -> IM 适配模块
+- `IM_GROUP_MESSAGE_SEND` -> IM 适配模块
+- `NOTIFY_IN_APP_SEND` -> 通知适配模块
+- `NOTIFY_SMS_SEND` -> 通知适配模块
+- `NOTIFY_EMAIL_SEND` -> 通知适配模块
+- `BEAN_INVOKE` -> 本地业务应用模块
 
-This allows one action definition to span multiple modules while keeping the DSL stable.
+这样可以让一个 Action 定义跨多个模块组合，同时保持 DSL 稳定。
 
-## Target Routing
+## Target 路由
 
-`target` identifies the concrete downstream platform, provider, or logical route used by the handler.
+`target` 用于标识 Handler 最终要访问的下游平台、provider 或逻辑路由。
 
-Examples:
+示例：
 
-- `IM_GROUP_CREATE` with `target: wecom`
-- `IM_GROUP_INVITE` with `target: feishu`
-- `NOTIFY_SMS_SEND` with `target: aliyun-sms`
-- `NOTIFY_EMAIL_SEND` with `target: smtp`
-- `MQ_MESSAGE` with `target: topic.user.created`
+- `IM_GROUP_CREATE` 配合 `target: wecom`
+- `IM_GROUP_INVITE` 配合 `target: feishu`
+- `NOTIFY_SMS_SEND` 配合 `target: aliyun-sms`
+- `NOTIFY_EMAIL_SEND` 配合 `target: smtp`
+- `MQ_MESSAGE` 配合 `target: topic.user.created`
 
-Recommended rule:
+推荐规则：
 
-- `stepType` defines the capability contract
-- `target` selects the concrete provider or destination inside that capability
+- `stepType` 定义能力契约
+- `target` 选择该能力下的具体 provider 或目标地址
 
-This prevents the DSL from exploding into provider-specific step type names such as `WECOM_GROUP_INVITE` or `ALIYUN_SMS_SEND`.
+这样可以避免 DSL 膨胀成 `WECOM_GROUP_INVITE`、`ALIYUN_SMS_SEND` 这种强 provider 绑定的 StepType 名称。
 
-## Step Handler Contract
+## Step Handler 契约
 
-Every registered `stepType` should implement a common execution contract.
+每个已注册的 `stepType` 都应实现统一的执行契约。
 
-Suggested shape:
+建议形态：
 
 ```java
 public interface ActionStepHandler {
@@ -193,24 +193,24 @@ public interface ActionStepHandler {
 }
 ```
 
-The framework runtime owns orchestration. The handler owns only the concrete side effect execution.
+框架运行时负责编排，Handler 只负责执行具体副作用。
 
-The handler must not:
+Handler 不应：
 
-- update action state directly
-- manipulate outbox rows directly
-- decide global orchestration transitions by itself
+- 直接更新 Action 状态
+- 直接操作 outbox 记录
+- 自己决定全局编排状态流转
 
-The handler should:
+Handler 应该：
 
-- execute the downstream operation
-- return structured execution facts
-- surface normalized failure information
-- honor timeout and idempotency requirements
+- 执行下游操作
+- 返回结构化执行事实
+- 暴露标准化失败信息
+- 遵守超时与幂等约束
 
-## Step Context
+## Step 上下文
 
-The execution context passed to handlers should include:
+传递给 Handler 的执行上下文至少应包含：
 
 - action identity
 - action name and version
@@ -222,114 +222,114 @@ The execution context passed to handlers should include:
 - timeout metadata
 - prior step outputs if enabled by runtime policy
 
-The DSL itself does not expose this structure directly, but templates and handlers rely on it as runtime input.
+DSL 本身不会直接暴露这整个结构，但模板渲染和 Handler 执行都会依赖这些运行时输入。
 
-## Capability-Specific Input Shape
+## 能力特定输入结构
 
-The first version should keep one unified runtime contract while allowing capability-specific request payloads.
+第一版应尽量保持统一的运行时契约，同时允许不同能力拥有各自的请求载荷结构。
 
-Examples:
+示例：
 
-- `IM_GROUP_CREATE`: group name, owner, member list, optional avatar or metadata
-- `IM_GROUP_INVITE`: group id, member list, inviter
-- `IM_GROUP_MESSAGE_SEND`: group id, message type, rendered content
-- `NOTIFY_IN_APP_SEND`: receiver ids, template id, variables
-- `NOTIFY_SMS_SEND`: phone numbers, sign, template id, variables
-- `NOTIFY_EMAIL_SEND`: recipients, subject, body or template variables
+- `IM_GROUP_CREATE`：群名、owner、成员列表、可选头像或扩展元数据
+- `IM_GROUP_INVITE`：群 id、成员列表、邀请人
+- `IM_GROUP_MESSAGE_SEND`：群 id、消息类型、渲染后的内容
+- `NOTIFY_IN_APP_SEND`：接收人 id 列表、模板 id、变量
+- `NOTIFY_SMS_SEND`：手机号列表、签名、模板 id、变量
+- `NOTIFY_EMAIL_SEND`：收件人、主题、正文或模板变量
 
-The framework should persist the rendered request snapshot before or alongside execution so governance can inspect exactly what was sent.
+框架应在执行前或执行时，把渲染后的请求快照持久化下来，以便治理侧能准确查看“到底发出了什么请求”。
 
-## Step Result Semantics
+## Step 结果语义
 
-A handler result should let the runtime distinguish:
+Handler 返回结果至少要让运行时区分：
 
-- success
-- retryable failure
-- terminal failure
+- 成功
+- 可重试失败
+- 终态失败
 
-The result should also optionally carry:
+结果对象还可以附带：
 
 - output payload
 - downstream receipt id
 - normalized error code
 - error message
 
-This is necessary for retry policy, governance display, and audit quality.
+这对重试策略、治理展示和审计质量都很重要。
 
-## Request Mapping
+## 请求映射
 
-Request mapping converts action context into step input.
+请求映射负责把 Action 上下文转换成 Step 输入。
 
-Suggested sources:
+建议可用的数据来源：
 
 - `bizKey`
 - `attributes.*`
-- previous step outputs if persisted and explicitly exposed
-- runtime metadata such as `actionId`
+- 如果已经持久化且明确开放，则允许读取前序 Step 输出
+- 运行时元数据，例如 `actionId`
 
-The first version should support simple template substitution and map rendering. Complex scripting should be avoided.
+第一版建议只支持简单模板替换和 map 渲染，避免引入复杂脚本。
 
-## Retry Policy
+## 重试策略
 
-Retry may be declared at action defaults level and overridden by individual steps.
+重试既可以在 Action 默认层定义，也可以被具体 Step 覆盖。
 
-Fields:
+字段：
 
 - `maxAttempts`
-- `backoff.mode`: `FIXED` or `EXPONENTIAL`
-- `backoff.delay` or `backoff.initialDelay`
+- `backoff.mode`：`FIXED` 或 `EXPONENTIAL`
+- `backoff.delay` 或 `backoff.initialDelay`
 - `backoff.maxDelay`
-- `retryOn`: optional error code or exception classification list
+- `retryOn`：可选错误码列表或异常分类列表
 
-Rules:
+规则：
 
-- step-local policy overrides action defaults
-- absence of step-local policy falls back to defaults
-- every retry must persist current attempt count and `nextRunAt`
+- Step 本地策略优先覆盖 Action 默认策略
+- 如果 Step 没有本地策略，则回退到默认值
+- 每一次重试都必须持久化当前尝试次数和 `nextRunAt`
 
-## Timeout Policy
+## 超时策略
 
-`timeout` defines the maximum runtime of one step attempt.
+`timeout` 定义一次 Step 尝试允许执行的最长时间。
 
-Rules:
+规则：
 
-- timeout breach is treated as a failed attempt
-- timeout classification may still be retryable
-- timeout must be visible in step history and alert context
+- 超时应视为一次失败尝试
+- 超时失败仍然可以被分类为可重试
+- 超时信息必须在 Step 历史和告警上下文中可见
 
-## Step Idempotency
+## Step 幂等
 
-Step idempotency prevents duplicate side effects when dispatch or worker failures cause replay.
+Step 幂等用于防止因为派发失败或 worker 故障重放导致的重复副作用。
 
-Fields:
+字段：
 
 - `keyTemplate`
-- `mode`: `REQUIRED` or `BEST_EFFORT`
+- `mode`：`REQUIRED` 或 `BEST_EFFORT`
 
-Rules:
+规则：
 
-- `REQUIRED` means the handler must reject execution if no deterministic key can be resolved
-- handlers should propagate idempotency keys to downstream systems when possible
+- `REQUIRED` 表示如果无法解析出确定性幂等 key，Handler 必须拒绝执行
+- 在可行情况下，Handler 应把幂等 key 继续透传给下游系统
 
-## Failure Policy
+## 失败策略
 
-Failure policy controls what happens when retries are exhausted.
+失败策略用于定义重试耗尽后的处理方式。
 
-Suggested fields:
+建议字段：
 
-- `afterRetriesExhausted`: `WAIT_MANUAL`, `FAIL_ACTION`, or `START_COMPENSATION`
+- `afterRetriesExhausted`：`WAIT_MANUAL`、`FAIL_ACTION` 或 `START_COMPENSATION`
 - `manualReasonTemplate`
 
-Recommended default:
+推荐默认值：
 
-- if compensation is configured for at least one completed prior step, use `START_COMPENSATION`
-- otherwise use `WAIT_MANUAL`
+- 如果前面至少有一个已完成步骤配置了补偿，优先使用 `START_COMPENSATION`
+- 否则使用 `WAIT_MANUAL`
 
-## Compensation Definition
+## 补偿定义
 
-Each step may define an optional compensation block.
+每个 Step 都可以定义一个可选的补偿块。
 
-Compensation fields:
+补偿字段：
 
 - `stepType`
 - `target`
@@ -337,30 +337,30 @@ Compensation fields:
 - `retry`
 - `timeout`
 
-Rules:
+规则：
 
-- compensation is only eligible if the forward step completed successfully
-- compensation executes in reverse order of completed forward steps
-- compensation has its own retry and timeout policy
-- compensation outcome is durably stored and auditable
-- compensation must also resolve to a registered executable handler contract
+- 只有正向步骤成功完成后，补偿才有资格执行
+- 补偿按已完成正向步骤的逆序执行
+- 补偿拥有独立的重试与超时策略
+- 补偿结果必须可持久化且可审计
+- 补偿也必须能解析到一个已注册、可执行的 handler 契约
 
-## Alert Policy
+## 告警策略
 
-Alert policy may exist at action or step level.
+告警策略既可以定义在 Action 级，也可以定义在 Step 级。
 
-Suggested fields:
+建议字段：
 
 - `onWaitingManual`
 - `onFinalFailure`
 - `onCompensationFailure`
 - `onHighLatency`
 
-Values may be severity levels such as `P1`, `P2`, `P3`.
+取值可以是 `P1`、`P2`、`P3` 这类严重级别。
 
-## Runtime Context
+## 运行时上下文
 
-The runtime context exposed to templates should include:
+暴露给模板的运行时上下文建议包含：
 
 - `actionId`
 - `actionName`
@@ -370,34 +370,34 @@ The runtime context exposed to templates should include:
 - `attempt`
 - `publishedAt`
 
-The first version should avoid arbitrary code execution in templates.
+第一版应避免在模板中支持任意代码执行。
 
-## Validation Rules
+## 校验规则
 
-The framework should reject a definition when:
+框架在以下情况下应拒绝一个定义：
 
-- `name` is blank
-- `steps` is empty
-- step names are duplicated
-- required fields for a step type are missing
-- retry policy is internally contradictory
-- compensation block is malformed
-- unsupported step type is used without a registered handler
+- `name` 为空
+- `steps` 为空
+- Step 名称重复
+- 某个 StepType 所需的必填字段缺失
+- 重试策略内部自相矛盾
+- 补偿块结构非法
+- 使用了未注册 Handler 的 StepType
 
-Startup validation should check not only the forward `stepType`, but also every compensation `stepType` referenced by enabled definitions.
+启动期校验不仅要检查正向 `stepType`，还应检查所有启用定义中被引用的补偿 `stepType`。
 
-## Versioning Rules
+## 版本规则
 
-Recommended first-version behavior:
+推荐的第一版行为：
 
-- new publishes use the latest enabled definition version unless explicitly pinned
-- running action instances continue with the resolved version they started with
-- definition version is persisted on the action instance
+- 新发布默认使用最新启用版本，除非明确指定版本
+- 运行中的 Action 实例继续沿用自己启动时解析到的版本
+- definition version 应写入 `action_instance`
 
-## Explicit Non-Features In This DSL
+## DSL 中明确不支持的特性
 
-- no parallel steps
-- no joins
-- no nested subflows
-- no embedded scripts
-- no dynamic graph mutation during execution
+- 不支持并行步骤
+- 不支持 joins
+- 不支持嵌套子流程
+- 不支持内嵌脚本
+- 不支持执行过程中动态修改图结构

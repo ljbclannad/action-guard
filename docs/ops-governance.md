@@ -1,375 +1,259 @@
-# Ops Governance
+# 治理操作
 
-## Purpose
+## 目的
 
-Governance is a core framework capability, not an optional admin UI.
+治理是框架的核心能力，不是一个可有可无的后台界面。
 
-If asynchronous side effects can fail, repeat, compensate, or stall, operators need durable visibility and bounded control.
+如果异步副作用可能失败、重复执行、触发补偿或长时间卡住，运维与业务操作人员就必须具备持久化可见性和有边界的控制能力。
 
-## Current Status
+## 当前状态
 
-The governance layer now has a real backend API in `action-guard-ops-api` for:
+当前治理层已经在 `action-guard-ops-api` 中提供了真实可用的后端 API，用于：
 
-- action list query
-- action detail query
-- step detail query
-- consume detail query
-- audit log query
-- manual retry
-- skip current step
-- cancel action
-- compensate entrypoint
+- Action 列表查询
+- Action 详情查询
+- Step 详情查询
+- 消费明细查询
+- 审计日志查询
+- 人工重试
+- 跳过当前步骤
+- 取消 Action
+- 触发补偿入口
 
-This does **not** mean all governance semantics are fully mature.
+这不代表所有治理语义都已经完全成熟。
 
-Current boundaries:
+当前边界如下：
 
-- query APIs return real data from runtime tables backed by the configured JDBC store
-- write operations write durable governance audit logs
-- compensation entry is wired to a real compensation runtime path
-- compensation execution is controlled by an action-level switch resolved from YAML default plus database override
-- compensation execution writes step-level durable compensation logs
-- skip is implemented with a minimal semantic: current step is moved into a stable success state and the audit log distinguishes operator skip from real execution success
-- action, step, and outbox writes now share a unified optimistic-locking-based fencing rule via `version`
-- permissions are not implemented in the current project phase
+- 查询 API 返回的是运行时表中的真实数据，底层依赖已配置的 JDBC 存储
+- 写操作会写入持久化治理审计日志
+- 补偿入口已经接通真实的补偿运行时路径
+- 补偿执行是否开启由 Action 级别开关控制，该开关由 YAML 默认值和数据库覆盖值共同决定
+- 补偿执行会写入 Step 级别的持久化补偿日志
+- 跳过能力目前采用最小语义：将当前 Step 置为稳定成功态，并通过审计日志区分“操作员跳过”和“真实执行成功”
+- Action、Step 和 Outbox 的写入现在通过 `version` 共用统一的基于乐观锁的 fencing 规则
+- 当前项目阶段还没有实现权限控制
 
-## Governance Goals
+## 治理目标
 
-- make every action instance observable
-- make failure states diagnosable
-- make operator actions explicit and auditable
-- prevent unsafe manual operations
-- keep automation and human intervention on the same state model
-- make repeated MQ consumption visible and explainable
+- 让每个 Action 实例都可观测
+- 让失败状态可诊断
+- 让人工操作显式可见且可审计
+- 防止不安全的人工干预
+- 让自动化和人工干预共享同一套状态模型
+- 让 MQ 重复消费变得可见且可解释
 
-## Primary Views
+## 核心视图
 
-The ops layer should provide these first-version views.
+运维治理层第一版应优先提供以下视图。
 
-These views are now implemented at API level in `action-guard-ops-api`.
+这些视图现在已经在 `action-guard-ops-api` 的 API 层实现。
 
-### Action List
+### Action 列表
 
-Fields:
+字段：
 
 - action id
 - action name
 - biz key
 - status
-- current step
-- created time
-- updated time
-- last error code
-- last error message
+- 当前步骤
+- 创建时间
+- 更新时间
+- 最后错误码
+- 最后错误信息
 
-Common filters:
+常见筛选条件：
 
 - status
 - action name
 - biz key
-- creation time range
+- 创建时间范围
 
-Current implementation notes:
+当前实现说明：
 
-- pagination is supported
-- basic filters are supported
-- "waiting manual only" is not currently implemented because the runtime state model does not yet expose a dedicated waiting-manual terminal path
+- 已支持分页
+- 已支持基础筛选
+- 目前还不支持“仅查看等待人工处理”，因为当前运行时状态模型尚未暴露专门的 waiting-manual 终止路径
 
-### Action Detail
+### Action 详情
 
-Fields:
+字段：
 
-- action base fields
-- current failure reason
-- step summary list
-- consume summary list
+- Action 基础字段
+- 当前失败原因
+- Step 摘要列表
+- 消费摘要列表
 
-Current implementation notes:
+当前实现说明：
 
-- resolved definition version is not currently exposed
-- outbox state is not currently included in the detail response
-- audit timeline is queried through a separate audit log endpoint
-- compensation timeline is queried through a separate compensation log endpoint
+- 当前还没有暴露已解析的 definition version
+- 详情响应当前还不包含 outbox 状态
+- 审计时间线通过单独的审计日志接口查询
+- 补偿时间线通过单独的补偿日志接口查询
 
-### Step Detail
+### Step 详情
 
-Fields:
+字段：
 
-- step name and type
+- Step 名称和类型
 - target
-- attempt count
-- last error code and message
+- 尝试次数
+- 最后错误码和错误信息
 
-Current implementation notes:
+当前实现说明：
 
-- timeout, retry policy, request/response snapshot, and compensation history are not yet exposed in the current response model
+- 当前响应模型还没有暴露 timeout、retry policy、请求/响应快照以及补偿历史
 
-### Message Consumption Detail
+### 消息消费详情
 
-Fields:
+字段：
 
 - message id
 - consumer group
-- consume status
-- attempt count
-- last consume failure reason
+- 消费状态
+- 尝试次数
+- 最近一次消费失败原因
 
-Current implementation notes:
+当前实现说明：
 
-- attempt count is the currently exposed proxy for delivery count
-- dedicated dead-letter state exposure is not yet modeled separately in the governance response
+- 当前使用 attempt count 作为 delivery 次数的近似代理
+- 治理响应里还没有单独建模 dead-letter 状态
 
-## Current Operator Actions
+## 当前支持的人工操作
 
-The current API exposes a small but strict set of operator actions.
+当前 API 暴露的人工操作集合不大，但约束比较严格。
 
-### Manual Retry
+### 人工重试
 
-Use when the underlying problem is believed resolved.
+适用于底层问题已经被认为修复的场景。
 
-Rules:
+规则：
 
-- allowed from `FAILED` or `RETRYING`
-- writes a durable audit event
-- reuses the existing current-step dispatch path
+- 只允许从 `FAILED` 或 `RETRYING` 进入
+- 会写入持久化审计事件
+- 复用现有的当前步骤派发路径
 
-### Skip Current Step
+### 跳过当前步骤
 
-Use only when business owners accept omission of the side effect.
+仅当业务方接受省略该副作用时才应使用。
 
-Rules:
+规则：
 
-- currently does not require explicit reason input in the API contract
-- current project phase does not support non-skippable step metadata
-- writes an audit record and advances to the next step or `SUCCESS`
-- current implementation marks the skipped step into a stable success state and relies on audit logs to preserve the operator-skip meaning
+- 当前 API 契约还不要求显式填写原因
+- 当前项目阶段还不支持“不可跳过 Step”的元数据
+- 会写入审计记录，并推进到下一步或 `SUCCESS`
+- 当前实现会把被跳过的 Step 标记为稳定成功态，并依赖审计日志保留“操作员跳过”的语义
 
-### Cancel Action
+### 取消 Action
 
-Stops further automatic execution.
+用于停止后续自动执行。
 
-Rules:
+规则：
 
-- allowed only for non-terminal actions
-- does not pretend already completed side effects were undone
-- currently moves the action to `IGNORED`
+- 只允许对非终态 Action 执行
+- 不会假装已经完成的副作用被撤销
+- 当前会把 Action 状态置为 `IGNORED`
 
-### Trigger Compensation
+### 触发补偿
 
-Starts reverse handling for already successful prior steps.
+用于对已经成功执行过的前序步骤启动反向处理。
 
-Rules:
+规则：
 
-- current implementation validates action status and records durable audit
-- effective compensation enablement is resolved as: database override by `actionName` wins, otherwise fallback to YAML `compensationEnabled`
-- YAML `compensationEnabled` default is currently `false`
-- only `FAILED` and `DEAD` may enter compensation
-- compensation runs only against already successful steps
-- successful steps are compensated in reverse `stepIndex` order
-- if no compensator is registered for a successful step, that step is skipped and compensation continues
-- if any compensator fails, the action moves to `DEAD`
-- if all compensations succeed or are skippable, the action moves to `COMPENSATED`
-- one compensation run produces one `compensation_batch_id`
-- each processed successful step writes one compensation log row
+- 当前实现会校验 Action 状态并记录持久化审计
+- 补偿是否开启的生效规则是：数据库中按 `actionName` 的覆盖优先，否则回退到 YAML 中的 `compensationEnabled`
+- YAML 中 `compensationEnabled` 的当前默认值是 `false`
+- 只有 `FAILED` 和 `DEAD` 能进入补偿流程
+- 补偿只会针对已经成功执行的步骤运行
+- 成功步骤会按 `stepIndex` 逆序补偿
+- 如果某个成功步骤没有注册 compensator，会跳过该步骤并继续补偿
+- 如果任一 compensator 执行失败，Action 会转为 `DEAD`
+- 如果所有补偿都成功或可跳过，Action 会转为 `COMPENSATED`
+- 一次补偿运行会生成一个 `compensation_batch_id`
+- 每个被处理的成功步骤都会写入一条补偿日志
 
-### Reopen Waiting Manual
+### 重新打开 Waiting Manual
 
-Returns a manually handled action to dispatchable execution after policy or data correction.
+用于在策略或数据修正后，把一个已人工处理的 Action 重新放回可派发执行状态。
 
-## Safety Controls
+## 安全控制
 
-Governance APIs must enforce safety, not just rely on UI warnings.
+治理 API 必须通过服务端强制保证安全，而不能只依赖 UI 警告。
 
-Recommended controls:
+建议控制项：
 
-- optimistic version check on operator mutations
-- action-level and step-level terminal-state guards
+- 对人工变更加上乐观锁版本校验
+- 增加 Action 级和 Step 级的终态保护
 
-Current implementation notes:
+当前实现说明：
 
-- action-level state validation is implemented
-- permission boundaries are intentionally not implemented in the current project phase
-- explicit reason fields are not yet enforced
-- non-skippable step markers are not yet implemented
-- compensation is additionally guarded by an action-level governance switch
-- governance write conflicts are surfaced explicitly rather than retried silently
+- 已实现 Action 级状态校验
+- 当前项目阶段有意不实现权限边界
+- 目前还没有强制显式原因字段
+- 目前还没有实现不可跳过 Step 标记
+- 补偿还额外受到 Action 级治理开关保护
+- 治理写冲突会显式暴露，而不是静默重试
 
-## Alerting
+## 告警
 
-Alerting should be attached to meaningful operational transitions.
+告警应绑定在有业务与运维意义的状态变化上。
 
-Minimum first-version alert events:
+第一版最少应覆盖的告警事件：
 
-- action enters `WAITING_MANUAL`
-- retries exhausted
-- compensation fails
-- dispatcher lag exceeds threshold
-- action age exceeds SLA
-- repeated consume failure exceeds threshold
-- dead-letter backlog exceeds threshold
+- Action 进入 `WAITING_MANUAL`
+- 重试耗尽
+- 补偿失败
+- dispatcher 积压超过阈值
+- Action 存活时长超过 SLA
+- 重复消费失败超过阈值
+- dead-letter 堆积超过阈值
 
-Recommended alert payload:
+建议告警载荷：
 
 - action id
 - action name
 - biz key
-- current step
+- 当前步骤
 - status
-- last error code
-- last error summary
-- ops deep link if available
+- 最后错误码
+- 最近错误摘要
+- 如果有的话，附带 ops deep link
 
-Current implementation notes:
+当前实现说明：
 
-- alerting integration is not implemented yet
+- 当前还没有实现告警集成
 
-## Audit Requirements
+## 审计要求
 
-Every operator action must create an immutable audit event.
+每一次人工操作都必须生成不可变的审计事件。
 
-Required audit context:
+必需的审计上下文：
 
-- who initiated the action
-- when it happened
-- what action and step were affected
-- what was requested
-- what state changed
-- why the operator performed it
+- 谁发起了这次操作
+- 操作发生的时间
+- 影响到了哪个 Action 和 Step
+- 请求内容是什么
+- 状态发生了什么变化
+- 为什么执行这次人工操作
 
-Current implementation notes:
+当前实现说明：
 
-- durable audit persistence is implemented through `action_ops_audit_log`
-- current stored fields include action id, operation type, operator, request payload snapshot, result status, result message, and created time
-- `operator` currently comes from optional request header `X-Action-Guard-Operator`, defaulting to `anonymous`
-- compensate success and failure are both audited through the same governance audit pipeline
+- 已通过 `action_ops_audit_log` 实现持久化审计存储
+- 当前存储字段包括 action id、operation type、operator、请求快照、结果状态、结果消息和创建时间
+- 当前 `operator` 来自可选请求头 `X-Action-Guard-Operator`，默认值是 `anonymous`
+- 补偿成功与失败都走同一条治理审计链路
 
-## Governance API Surface
+## 治理 API 范围
 
-Current API categories:
+当前 API 分类：
 
-- list actions
-- query action detail
-- query step detail list
-- query message consume detail list
-- manual retry
-- skip step
-- cancel action
-- trigger compensation
-- query compensation logs
-- list audit logs
-
-The API contract is state-aware and returns clear rejection failures for invalid transitions or disabled capabilities.
-
-Current endpoint groups:
-
-- `GET /api/actions`
-- `GET /api/actions/{actionInstanceId}`
-- `GET /api/actions/{actionInstanceId}/steps`
-- `GET /api/actions/{actionInstanceId}/consumes`
-- `GET /api/actions/{actionInstanceId}/compensations`
-- `GET /api/audit-logs`
-- `POST /api/actions/{actionInstanceId}/retry`
-- `POST /api/actions/{actionInstanceId}/skip`
-- `POST /api/actions/{actionInstanceId}/cancel`
-- `POST /api/actions/{actionInstanceId}/compensate`
-
-Current compensation behavior:
-
-- disabled switch: explicit failure + audit
-- enabled switch + successful reverse compensation: success + audit
-- enabled switch + compensation failure: failure + audit
-- `SKIPPED / SUCCESS / FAILED` compensation step results are written to a dedicated compensation log table
-- compensation state transitions are protected by optimistic locking; on conflict, the current node stops compensation and does not continue the batch
-
-## Concurrency And Fencing
-
-Current fencing rule:
-
-- `action_instance`
-- `action_step_instance`
-- `action_outbox`
-
-all use existing `version` fields as optimistic-locking guards.
-
-Current conflict handling:
-
-- runtime forward progression conflict:
-  stop current progression and do not continue dispatch
-- runtime retry progression conflict:
-  stop current retry dispatch
-- compensation progression conflict:
-  stop the current compensation run
-- governance write conflict:
-  return explicit failure and write failed audit
-
-## SLO And Monitoring
-
-Recommended operational metrics:
-
-- action publish count
-- action success count
-- action failure count
-- action waiting manual count
-- step retry count
-- compensation count
-- dispatcher scan latency
-- dispatcher claim failure count
-- MQ publish failure count
-- MQ redelivery count
-- duplicate consume skipped count
-- dead-letter message count
-- step execution latency by step type
-
-Recommended dashboards:
-
-- backlog and dispatch lag
-- MQ publish and consume health
-- duplicate consumption trend
-- dead-letter backlog
-- retries and exhausted retries
-- waiting manual trend
-- compensation trend
-- terminal failure distribution by action and step
-
-## Governance Policy Defaults
-
-Reasonable first-version defaults:
-
-- retries exhausted currently move action to `FAILED`
-- skipping a step currently does not require operator reason
-- compensation failure alerting is not implemented yet
-- terminal actions cannot be mutated except by governance transitions explicitly allowed by current validation logic
-- compensation is disabled by default unless YAML enables it or database policy overrides it to enabled
-
-## Governance Persistence
-
-Current governance persistence uses:
-
-- runtime tables:
-  - `action_instance`
-  - `action_step_instance`
-  - `action_outbox`
-  - `action_consume_log`
-- governance audit table:
-  - `action_ops_audit_log`
-- governance policy table:
-  - `action_governance_policy`
-- compensation log table:
-  - `action_compensation_log`
-
-Compensation log semantics:
-
-- one compensation run creates one `compensation_batch_id`
-- one processed successful historical step creates one log row in that batch
-- current compensation statuses are:
-  - `SKIPPED`
-  - `SUCCESS`
-  - `FAILED`
-
-This allows governance queries and write-audit persistence to share the same JDBC store as the runtime prototype, with H2 as the default demo option and MySQL as a production switch target.
-
-## Boundaries
-
-Governance is not an excuse to normalize broken automation.
-
-If most actions require manual intervention, the correct fix is runtime and policy improvement, not stronger operator tooling alone.
+- 列出 Action
+- 查询 Action 详情
+- 查询 Step 详情列表
+- 查询消息消费详情列表
+- 人工重试
+- 跳过 Step
+- 取消 Action
+- 触发补偿
+- 查询补偿日志
+- 列出审计日志

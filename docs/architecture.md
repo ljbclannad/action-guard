@@ -1,180 +1,180 @@
-# Architecture
+# 架构设计
 
-## Goal
+## 目标
 
-`action-guard` provides a reliable way to orchestrate asynchronous business side effects after a local transaction commits.
+`action-guard` 提供了一种在本地事务提交后，可靠编排异步业务副作用的方式。
 
-Its architecture centers on one guarantee:
+它的架构围绕一个核心保证展开：
 
-`publish(action)` must never produce a state where the business transaction succeeds but the asynchronous side effect is silently lost.
+`publish(action)` 绝不能出现“业务事务成功，但异步副作用被悄悄丢失”的状态。
 
-## Architecture Principles
+## 架构原则
 
-- Use the outbox pattern as the only reliable publish path.
-- Separate reliable publish from message execution semantics.
-- Keep the first version limited to serial steps.
-- Treat governance as part of the runtime, not an external afterthought.
-- Prefer explicit state transitions over implicit in-memory control flow.
-- Separate business transaction success from downstream side effect success.
+- 使用 outbox 模式作为唯一可靠的发布路径。
+- 将可靠发布与消息执行语义解耦。
+- 第一版只支持串行步骤。
+- 将治理视为运行时的一部分，而不是后补的外围系统。
+- 优先采用显式状态流转，而不是隐式的内存控制流。
+- 明确区分业务事务成功与下游副作用成功。
 
-## Layered Architecture
+## 分层架构
 
-### 1. Capability Layer
+### 1. 能力层
 
-This layer owns business-facing execution capabilities.
+这一层负责面向业务的执行能力。
 
-Responsibilities:
+职责：
 
-- define capability-domain `stepType` handlers
-- encapsulate downstream platform integration details
-- expose uniform execution SPI implementations
+- 定义能力域的 `stepType` handler
+- 封装下游平台集成细节
+- 暴露统一的执行 SPI 实现
 
-Examples:
+示例：
 
-- IM collaboration capability
-- notification capability
-- future storage or approval capability
+- IM 协作能力
+- 通知能力
+- 后续可能扩展的存储或审批能力
 
-This layer must not own outbox consistency or MQ consumer semantics.
+这一层不应负责 outbox 一致性，也不应负责 MQ 消费语义。
 
-### 2. Publish / Outbox Layer
+### 2. Publish / Outbox 层
 
-This layer owns reliable action publication and durable execution scheduling.
+这一层负责可靠的 Action 发布和持久化的执行调度。
 
-Responsibilities:
+职责：
 
-- accept `publish(action)` requests
-- persist `action_instance` and `action_outbox` in one transaction
-- resolve action definitions
-- determine what execution work should be emitted next
-- persist action and step state transitions
+- 接收 `publish(action)` 请求
+- 在同一事务内持久化 `action_instance` 和 `action_outbox`
+- 解析 Action 定义
+- 决定下一步应该发出什么执行任务
+- 持久化 Action 和 Step 的状态流转
 
-This layer is the source of truth for orchestration state.
+这一层是编排状态的事实来源。
 
-### 3. Message Execution Layer
+### 3. 消息执行层
 
-This layer owns asynchronous delivery and consumption semantics.
+这一层负责异步投递和消费语义。
 
-Responsibilities:
+职责：
 
-- publish outbox work to MQ
-- consume MQ messages
-- tolerate repeated consumption
-- deduplicate or fence repeated execution attempts
-- invoke runtime step execution callbacks
-- coordinate MQ ack, retry, and dead-letter behavior
+- 将 outbox 任务发布到 MQ
+- 消费 MQ 消息
+- 容忍重复消费
+- 对重复执行尝试做去重或 fencing
+- 调用运行时 Step 执行回调
+- 协调 MQ ack、重试和死信行为
 
-This layer is where at-least-once delivery becomes governable step execution.
+这一层把 at-least-once 投递语义转化为可治理的 Step 执行过程。
 
-## Logical Components
+## 逻辑组件
 
-### 1. Publish API
+### 1. 发布 API
 
-Business applications call `ActionPublisher.publish(ActionRequest)`.
+业务应用通过 `ActionPublisher.publish(ActionRequest)` 发起调用。
 
-Responsibilities:
+职责：
 
-- validate request shape
-- resolve the action definition name
-- persist initial action instance state
-- persist outbox work in the same local transaction
+- 校验请求结构
+- 解析 Action 定义名
+- 持久化初始 Action 实例状态
+- 在同一本地事务里持久化 outbox 任务
 
-This API must not directly execute remote side effects.
+这个 API 不应直接执行远程副作用。
 
-### 2. Definition Registry
+### 2. 定义注册表
 
-The definition registry loads action definitions from YAML or other configured sources.
+定义注册表负责从 YAML 或其他配置源加载 Action 定义。
 
-Responsibilities:
+职责：
 
-- resolve action definition by name and version
-- validate definition structure at startup or refresh time
-- expose step-level execution metadata to the runtime
+- 按名称和版本解析 Action 定义
+- 在启动或刷新时校验定义结构
+- 向运行时暴露 Step 级执行元数据
 
-### 3. Persistence Layer
+### 3. 持久化层
 
-Persistence stores runtime state explicitly.
+持久化层显式存储运行时状态。
 
-Core persisted entities:
+核心持久化实体：
 
 - `action_instance`
 - `action_step_instance`
 - `action_outbox`
 - `action_audit_log`
 
-The persistence layer is responsible for durable state, not orchestration decisions.
+持久化层负责保证状态持久化，而不是做编排决策。
 
 ### 4. Dispatcher
 
-The dispatcher polls executable outbox rows and prepares them for asynchronous delivery.
+Dispatcher 轮询可执行的 outbox 记录，并为异步投递做准备。
 
-Responsibilities:
+职责：
 
-- scan pending work using index-friendly conditions
-- claim rows safely in clustered deployment
-- hand claimed work to the message producer
-- release or advance work after durable publish state is written
+- 使用索引友好的条件扫描待处理任务
+- 在集群部署下安全地 claim 记录
+- 把已 claim 的任务交给消息生产者
+- 在持久化写入发布结果后释放或推进任务状态
 
-The dispatcher is the boundary between durable pending work and MQ delivery.
+Dispatcher 是“持久待执行任务”和“MQ 投递”之间的边界。
 
-### 4.1 Message Producer
+### 4.1 消息生产者
 
-The message producer publishes claimed outbox work to the configured MQ transport.
+消息生产者把已 claim 的 outbox 任务发布到配置好的 MQ 通道。
 
-Responsibilities:
+职责：
 
-- convert outbox work into transport messages
-- attach message identity and idempotency metadata
-- publish to topic or queue
-- write durable publish result or failure state
+- 把 outbox 任务转换成传输消息
+- 附带消息标识和幂等元数据
+- 发布到 topic 或 queue
+- 持久化发布结果或失败状态
 
-### 4.2 Message Consumer
+### 4.2 消息消费者
 
-The message consumer receives execution messages from MQ and triggers step execution.
+消息消费者从 MQ 接收执行消息，并触发 Step 执行。
 
-Responsibilities:
+职责：
 
-- deserialize action execution message
-- perform repeated-consumption check
-- fence duplicate execution when required
-- invoke runtime execution callback
-- apply ack, retry, or dead-letter decision
+- 反序列化 Action 执行消息
+- 做重复消费检查
+- 在需要时对重复执行做 fencing
+- 调用运行时执行回调
+- 应用 ack、重试或死信决策
 
-This is the layer the user referred to as the message consumption layer.
+这就是通常所说的“消息消费层”。
 
-### 5. Runtime Executor
+### 5. 运行时执行器
 
-The runtime executor drives a single action instance through its serial steps.
+运行时执行器负责驱动单个 Action 实例按串行步骤推进。
 
-Responsibilities:
+职责：
 
-- load current action and step state
-- locate the next executable step
-- invoke the correct step handler
-- apply retry policy
-- write result, next schedule, and state transitions
-- trigger compensation or governance hooks when required
+- 加载当前 Action 和 Step 状态
+- 定位下一个可执行步骤
+- 调用正确的 Step Handler
+- 应用重试策略
+- 写入执行结果、下一次调度信息和状态流转
+- 在需要时触发补偿或治理钩子
 
-### 6. Step Handlers
+### 6. Step Handler
 
-Step handlers execute concrete side effects such as:
+Step Handler 负责执行具体副作用，例如：
 
-- HTTP call
-- MQ message publish
-- Spring bean method invocation
-- webhook callback
+- HTTP 调用
+- MQ 消息发布
+- Spring Bean 方法调用
+- webhook 回调
 
-Each handler must support:
+每个 handler 至少应支持：
 
-- idempotent execution contract
-- timeout contract
-- structured result classification
+- 幂等执行契约
+- 超时契约
+- 结构化结果分类
 
 ### 6.1 Step Handler SPI
 
-The runtime must not hardcode business step logic.
+运行时不应把业务步骤逻辑硬编码在内核里。
 
-Instead, it should resolve each step through a uniform SPI such as:
+相反，它应通过统一 SPI 解析每一个步骤，例如：
 
 ```java
 public interface ActionStepHandler {
@@ -185,57 +185,57 @@ public interface ActionStepHandler {
 }
 ```
 
-The SPI contract should make three things explicit:
+这个 SPI 契约至少要把三件事说清楚：
 
-- which `stepType` the handler owns
-- what execution context the runtime provides
-- how the handler reports success, retryable failure, and terminal failure
+- handler 负责哪个 `stepType`
+- 运行时会提供什么执行上下文
+- handler 如何上报成功、可重试失败和终态失败
 
-### 6.2 Handler Registration Model
+### 6.2 Handler 注册模型
 
-Handlers should be contributed by modules and registered at application startup.
+Handler 应由不同模块提供，并在应用启动时完成注册。
 
-Recommended model in Spring Boot:
+在 Spring Boot 中，推荐模型如下：
 
-1. each adapter or business module exposes one or more `ActionStepHandler` beans
-2. the starter collects all beans into a `StepHandlerRegistry`
-3. the runtime resolves `stepType -> handler` through the registry
+1. 每个适配模块或业务模块暴露一个或多个 `ActionStepHandler` Bean
+2. starter 收集所有 Bean 并组装成 `StepHandlerRegistry`
+3. 运行时通过注册表完成 `stepType -> handler` 解析
 
-This allows one action definition to span multiple modules as long as every referenced `stepType` has exactly one registered handler.
+这样一来，只要每个被引用的 `stepType` 恰好有一个已注册 handler，一个 Action 定义就可以跨多个模块。
 
-Examples:
+示例：
 
-- `MQ_MESSAGE` from `action-guard-adapter-rabbitmq`
-- `HTTP_CALL` from a core HTTP adapter
-- `GROUP_INVITE` from an IM integration module
-- `BEAN_INVOKE` from a local application module
-- `NOTIFY_SMS_SEND` from a notification adapter module
+- `MQ_MESSAGE` 由 `action-guard-adapter-rabbitmq` 提供
+- `HTTP_CALL` 由核心 HTTP 适配模块提供
+- `GROUP_INVITE` 由 IM 集成模块提供
+- `BEAN_INVOKE` 由本地应用模块提供
+- `NOTIFY_SMS_SEND` 由通知适配模块提供
 
-### 6.3 Registry Responsibilities
+### 6.3 注册表职责
 
-The registry should:
+注册表应负责：
 
-- index handlers by `stepType`
-- reject duplicate registrations for the same `stepType`
-- expose lookup for forward execution
-- expose lookup for compensation execution if compensation uses the same or a separate SPI
-- support startup validation against loaded action definitions
+- 按 `stepType` 建立索引
+- 拒绝同一个 `stepType` 的重复注册
+- 暴露正向执行的查询能力
+- 如果补偿使用同一套或独立 SPI，也要暴露补偿执行查询能力
+- 支持在启动时对已加载的 Action 定义做校验
 
-### 6.4 Runtime Lookup Rule
+### 6.4 运行时查找规则
 
-When the runtime reaches a step:
+当运行时走到某个 Step 时：
 
-1. it reads `stepType` from the resolved action definition
-2. it queries the registry for the matching handler
-3. it builds `ActionStepContext`
-4. it invokes the handler
-5. it persists the returned execution result
+1. 从已解析的 Action 定义中读取 `stepType`
+2. 到注册表中查找匹配的 handler
+3. 构造 `ActionStepContext`
+4. 调用 handler
+5. 持久化返回的执行结果
 
-If no handler is registered for the `stepType`, the framework must not silently skip the step. It should fail definition validation at startup when possible, or fail the action deterministically with a clear governance-visible error.
+如果 `stepType` 没有注册 handler，框架绝不能静默跳过该步骤。理想情况下应在启动期定义校验时就失败；如果做不到，也应该以确定性的方式让 Action 失败，并给出治理可见的明确错误。
 
-### 6.5 Context Passed To Handlers
+### 6.5 传递给 Handler 的上下文
 
-`ActionStepContext` should provide at least:
+`ActionStepContext` 至少应提供：
 
 - action instance identity
 - definition name and version
@@ -247,138 +247,138 @@ If no handler is registered for the `stepType`, the framework must not silently 
 - deadline or timeout metadata
 - access to previous persisted step outputs if that feature is enabled
 
-Handlers should not need direct access to orchestration internals such as outbox claiming details.
-Handlers should also not own MQ ack or duplicate-consumption handling.
+Handler 不应直接访问 outbox claim 细节等编排内部机制。
+Handler 也不应负责 MQ ack 或重复消费处理。
 
-### 6.6 Execution Result Contract
+### 6.6 执行结果契约
 
-`StepExecutionResult` should be explicit enough for governance and retry:
+`StepExecutionResult` 应足够明确，以支持治理与重试：
 
 - `SUCCESS`
 - `RETRYABLE_FAILURE`
 - `TERMINAL_FAILURE`
 
-The result should also allow:
+结果对象还应支持：
 
-- normalized error code
-- human-readable message
-- optional structured output payload
-- optional downstream receipt or message id
+- 标准化错误码
+- 可读错误信息
+- 可选的结构化输出载荷
+- 可选的下游回执或消息 id
 
-This keeps policy decisions in the runtime while letting handlers report accurate execution facts.
+这样既能把策略决策留在运行时层，又能让 handler 准确上报执行事实。
 
-### 6.7 Compensation Handler Model
+### 6.7 补偿 Handler 模型
 
-There are two acceptable first-version models:
+第一版可以接受两种模型：
 
-- reuse `ActionStepHandler` and mark compensation as another step definition
-- define a separate `ActionCompensationHandler` SPI
+- 复用 `ActionStepHandler`，把补偿建模为另一种 Step 定义
+- 定义独立的 `ActionCompensationHandler` SPI
 
-The preferred design is to keep compensation independently modeled when the downstream inverse action differs materially from the forward action.
+当下游逆向动作与正向动作存在明显差异时，更推荐把补偿独立建模。
 
-In either case, the compensation registration contract must be explicit and startup-validatable.
+无论采用哪种方式，补偿注册契约都必须足够明确，并支持启动期校验。
 
-### 6.8 Multi-Module Composition
+### 6.8 多模块组合
 
-A single action may span handlers from multiple modules.
+一个 Action 可以跨多个模块组合 handler。
 
-Example:
+示例：
 
-- step 1 `IM_GROUP_CREATE` from an IM adapter
-- step 2 `IM_GROUP_INVITE` from the same IM adapter
-- step 3 `IM_GROUP_MESSAGE_SEND` from the same IM adapter
-- step 4 `NOTIFY_SMS_SEND` from a notification adapter
+- 第 1 步 `IM_GROUP_CREATE` 来自 IM 适配模块
+- 第 2 步 `IM_GROUP_INVITE` 来自同一个 IM 适配模块
+- 第 3 步 `IM_GROUP_MESSAGE_SEND` 来自同一个 IM 适配模块
+- 第 4 步 `NOTIFY_SMS_SEND` 来自通知适配模块
 
-The orchestration layer does not care which module owns the handler, only that:
+编排层并不关心 handler 属于哪个模块，它只关心：
 
-- the `stepType` is registered once
-- the handler contract is satisfied
-- execution results are durably recorded
+- `stepType` 只被注册一次
+- handler 契约得到满足
+- 执行结果被可靠持久化
 
-This is how the framework supports business flows such as "send message, then create group, then pull users into group" without coupling the runtime to one domain module.
+这就是框架能够支持“先发消息，再建群，再拉人进群”这类跨域业务流程、同时又不把运行时耦合到某一个领域模块的原因。
 
-### 6.9 Recommended Capability Modules
+### 6.9 推荐能力模块
 
-The project structure should express capability domains explicitly.
+项目结构应该显式表达能力域边界。
 
-Recommended first-version adapter modules:
+第一版推荐的适配模块：
 
-- `action-guard-adapter-rabbitmq`: MQ publish handlers
-- `action-guard-adapter-kafka`: Kafka 占位适配模块，当前不属于第一版推荐主路径
-- `action-guard-adapter-im`: IM collaboration handlers
-- `action-guard-adapter-notify`: notification handlers
+- `action-guard-adapter-rabbitmq`：MQ 发布 handler
+- `action-guard-adapter-kafka`：Kafka 占位适配模块，当前不属于第一版推荐主路径
+- `action-guard-adapter-im`：IM 协作 handler
+- `action-guard-adapter-notify`：通知 handler
 
-Recommended first-version step types by module:
+第一版推荐的模块与 StepType 对应关系：
 
 - RabbitMQ: `MQ_MESSAGE`
 - Kafka: `KAFKA_MESSAGE`
 - IM: `IM_GROUP_CREATE`, `IM_GROUP_INVITE`, `IM_GROUP_MESSAGE_SEND`
 - Notify: `NOTIFY_IN_APP_SEND`, `NOTIFY_SMS_SEND`, `NOTIFY_EMAIL_SEND`
 
-This keeps module boundaries aligned to integration domains rather than forcing one module per individual step type.
+这样可以让模块边界按集成领域划分，而不是被迫细化成“每个 StepType 一个模块”。
 
-### 7. Governance Services
+### 7. 治理服务
 
-Governance services provide operator-facing control and observability.
+治理服务提供面向操作员的控制能力与可观测性。
 
-Responsibilities:
+职责：
 
-- list and inspect action instances
-- inspect step history and failure reasons
-- perform manual retry, skip, cancel, and compensation actions
-- publish alerts
-- write audit logs for every operator action
+- 列表化和查看 Action 实例
+- 查看 Step 历史和失败原因
+- 执行人工重试、跳过、取消和补偿操作
+- 发布告警
+- 为每次人工操作写入审计日志
 
-## End-to-End Flow
+## 端到端流程
 
-### 1. Publish Phase
+### 1. 发布阶段
 
-Inside the caller's local transaction:
+在调用方的本地事务内：
 
-1. domain data is updated
-2. `action_instance` is inserted with initial state such as `PENDING`
-3. `action_outbox` is inserted with dispatchable work
-4. the transaction commits
+1. 更新领域数据
+2. 插入初始状态为 `PENDING` 等值的 `action_instance`
+3. 插入可派发任务 `action_outbox`
+4. 提交事务
 
-If the transaction rolls back, neither the action instance nor the outbox row may remain visible.
+如果事务回滚，则 `action_instance` 和 `action_outbox` 都不应残留可见记录。
 
-### 2. Outbox Dispatch Phase
+### 2. Outbox 派发阶段
 
-After commit:
+提交之后：
 
-1. dispatcher polls rows in `action_outbox`
-2. dispatcher claims eligible rows using lease or status transition
-3. claimed rows are handed to the message producer
-4. message producer publishes execution messages to MQ
+1. dispatcher 轮询 `action_outbox`
+2. dispatcher 通过 lease 或状态流转 claim 可执行记录
+3. 把 claim 到的记录交给消息生产者
+4. 消息生产者把执行消息发布到 MQ
 
-Cluster safety comes from durable claim semantics, not in-memory locks alone.
+集群安全性来自持久化 claim 语义，而不是单纯依赖内存锁。
 
-### 3. MQ Consumption Phase
+### 3. MQ 消费阶段
 
-After MQ delivery:
+MQ 投递之后：
 
-1. consumer receives the execution message
-2. consumer checks message identity and repeated-consumption guard
-3. non-executable duplicate deliveries are acknowledged without re-running the step
-4. executable deliveries invoke the runtime executor
+1. consumer 接收执行消息
+2. consumer 校验消息标识和重复消费保护
+3. 对于不可执行的重复投递，直接 ack 而不重复执行 Step
+4. 对于可执行投递，调用运行时执行器
 
-At-least-once delivery is expected. Duplicate-consumption safety is mandatory.
+at-least-once 投递是默认前提，重复消费安全是强制要求。
 
-### 4. Execution Phase
+### 4. 执行阶段
 
-For each claimed action:
+对于每个被 claim 的 Action：
 
-1. runtime loads the definition and instance state
-2. runtime finds the current serial step
-3. runtime invokes the step handler
-4. runtime persists step result
-5. runtime either advances to the next step or schedules retry
+1. runtime 加载定义和实例状态
+2. runtime 找到当前串行步骤
+3. runtime 调用 Step Handler
+4. runtime 持久化 Step 结果
+5. runtime 决定推进到下一步还是安排重试
 
-If another step remains, the publish / outbox layer creates the next executable work and the message execution layer delivers it asynchronously again.
+如果后面还有步骤，publish / outbox 层会生成下一份可执行任务，再由消息执行层异步投递。
 
-### 5. Completion Phase
+### 5. 完成阶段
 
-The action reaches one of the terminal states:
+Action 最终会进入以下终态之一：
 
 - `SUCCESS`
 - `FAILED`
@@ -386,24 +386,24 @@ The action reaches one of the terminal states:
 - `COMPENSATED`
 - `IGNORED`
 
-`FAILED` means automatic progress stopped and operator action or compensation policy is now required.
+`FAILED` 表示自动推进已经停止，此时需要人工操作或补偿策略介入。
 
-## State Model
+## 状态模型
 
-Suggested action states:
+建议的 Action 状态：
 
-- `PENDING`: created but not yet claimed
-- `DISPATCHING`: claimed and being processed
-- `WAITING_RETRY`: waiting for next execution window
-- `WAITING_MANUAL`: automatic execution stopped, operator action required
-- `COMPENSATING`: compensation is executing
-- `COMPENSATED`: compensation completed
-- `SUCCESS`: all steps completed
-- `FAILED`: unrecoverable failure
-- `CANCELLED`: manually terminated
-- `IGNORED`: published but intentionally not executed
+- `PENDING`: 已创建但尚未被 claim
+- `DISPATCHING`: 已被 claim 且正在处理
+- `WAITING_RETRY`: 等待下一次执行窗口
+- `WAITING_MANUAL`: 自动执行停止，需要人工处理
+- `COMPENSATING`: 正在执行补偿
+- `COMPENSATED`: 补偿完成
+- `SUCCESS`: 全部步骤执行完成
+- `FAILED`: 不可恢复失败
+- `CANCELLED`: 被人工终止
+- `IGNORED`: 已发布但被明确选择不执行
 
-Suggested step states:
+建议的 Step 状态：
 
 - `PENDING`
 - `RUNNING`
@@ -414,104 +414,104 @@ Suggested step states:
 - `COMPENSATING`
 - `COMPENSATED`
 
-## Retry Model
+## 重试模型
 
-Retry is applied at the step level, not the whole action as a blind rerun.
+重试作用在 Step 级，而不是把整个 Action 粗暴地整体重跑。
 
-Each step definition should declare:
+每个 Step 定义应声明：
 
-- max attempts
-- backoff policy
+- 最大尝试次数
+- 退避策略
 - timeout
-- retryable error classification
+- 可重试错误分类
 
-A retry must write durable attempt count and next execution time before the worker releases control.
+在 worker 释放执行权之前，重试必须先把尝试次数和下次执行时间可靠写入持久化状态。
 
-## MQ Consumption Semantics
+## MQ 消费语义
 
-The framework should assume at-least-once delivery from MQ.
+框架应默认假设 MQ 提供的是 at-least-once 投递语义。
 
-That means the same execution message may be delivered more than once because of:
+这意味着同一条执行消息可能因为以下原因被投递多次：
 
-- consumer crash after step execution but before ack
-- broker redelivery after timeout
-- network ambiguity around ack result
-- explicit replay or dead-letter recovery
+- consumer 在 Step 执行后、ack 前崩溃
+- broker 超时后重新投递
+- ack 结果存在网络不确定性
+- 显式重放或死信恢复
 
-Required protections:
+必须具备的保护措施：
 
-- stable execution message id
-- durable consume record or equivalent fencing state
-- step-level idempotency key
-- terminal duplicate detection before handler invocation
+- 稳定的执行消息 id
+- 持久化消费记录或等价的 fencing 状态
+- Step 级幂等 key
+- 在调用 handler 之前先做终态重复检测
 
-The message layer should protect the runtime from accidental repeated side effects, but the handler contract must still support idempotent downstream execution.
+消息层应该保护运行时免于意外重复副作用，但 handler 契约本身仍必须支持下游幂等执行。
 
-## Message Layer Responsibilities
+## 消息层职责
 
-The message execution layer should explicitly own:
+消息执行层应显式负责：
 
-- transport message schema
-- consumer group strategy
-- consume deduplication
-- delayed retry or redelivery policy
-- dead-letter handling
-- replay support for governance operations
+- 传输消息结构
+- consumer group 策略
+- 消费去重
+- 延迟重试或重新投递策略
+- 死信处理
+- 面向治理操作的重放支持
 
-These concerns should not leak into capability modules.
+这些关注点不应泄漏到能力模块中。
 
-## Compensation Model
+## 补偿模型
 
-Compensation is a first-class framework capability.
+补偿是框架的一等能力。
 
-It is not a database rollback substitute. It is a forward recovery mechanism for already executed side effects.
+它不是数据库回滚的替代品，而是针对已执行副作用的前向恢复机制。
 
-Compensation rules:
+补偿规则：
 
-- only successfully completed steps are eligible for compensation
-- compensation runs in reverse step order
-- each compensation attempt is durably recorded
-- compensation failure can itself enter retry or manual governance flow
+- 只有已经成功完成的步骤才允许补偿
+- 补偿按步骤逆序执行
+- 每一次补偿尝试都必须可靠持久化
+- 补偿失败本身也可以进入重试或人工治理流程
 
-## Alerting Model
+## 告警模型
 
-Alerts should be emitted on governance-significant events such as:
+告警应在具有治理意义的事件上触发，例如：
 
-- final retry exhausted
-- action enters `WAITING_MANUAL`
-- compensation fails
-- dispatcher claim stalls beyond threshold
-- step latency breaches threshold
+- 最终重试耗尽
+- Action 进入 `WAITING_MANUAL`
+- 补偿失败
+- dispatcher claim 卡顿超过阈值
+- Step 延迟超过阈值
 
-Alerting must not be the only source of truth. Durable state and audit logs remain authoritative.
+告警不能成为唯一事实来源；持久化状态和审计日志才是权威依据。
 
-## Transaction Boundaries
+## 事务边界
 
-There are two critical transaction boundaries:
+这里有两个关键事务边界：
 
-### Boundary A: Business Commit
+### 边界 A：业务提交
 
-The business update, action instance insert, and outbox insert must commit atomically in one local transaction.
+业务更新、Action 实例写入和 outbox 写入必须在一个本地事务里原子提交。
 
-### Boundary B: Runtime State Advancement
+### 边界 B：运行时状态推进
 
-Each step execution result must be committed durably before worker ownership is released. The framework must never rely on in-memory progress after a remote side effect has occurred.
+每个 Step 执行结果都必须在 worker 释放执行权之前可靠提交。框架绝不能在远程副作用已经发生后，仍然依赖内存中的“未落库进度”。
 
-## What The First Version Explicitly Supports
+## 第一版明确支持的能力
 
-- explicit action publish
-- YAML-based action definition registry
-- serial step execution
-- step handler SPI and registry-driven module extension
-- outbox-based dispatch
-- step retry and timeout
-- built-in compensation model
-- alerting and operator governance
+- 显式 Action 发布
+- 基于 YAML 的 Action 定义注册表
+- 串行 Step 执行
+- 基于 Step Handler SPI 和注册表驱动的模块扩展
+- 基于 outbox 的派发
+- Step 重试与超时
+- 内建补偿模型
+- 告警与人工治理
 
-## What The First Version Explicitly Defers
+## 第一版明确暂缓的能力
 
-- parallel branches
-- conditional branches in the DSL
-- saga choreography across multiple services
-- cross-region active-active coordination
-- visual workflow authoring
+- 并行分支
+- DSL 中的条件分支
+- 跨多服务的 saga choreography
+- 跨地域双活协同
+- 可视化工作流编排

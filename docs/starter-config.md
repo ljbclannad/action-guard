@@ -1,12 +1,12 @@
-# Starter Config
+# Starter 配置说明
 
-## Purpose
+## 目的
 
 这份文档汇总 `action-guard-spring-boot-starter` 当前已经生效的默认配置项，作为接入时的第一参考。
 
 当前配置前缀统一为 `action.guard`。
 
-## Core Properties
+## 核心配置项
 
 ### `action.guard.definition-locations`
 
@@ -52,7 +52,7 @@
 
 - [可观测性说明](/Users/lejinbo/LLM/action-guard/docs/observability.md)
 
-## Recovery Properties
+## 恢复扫描配置项
 
 ### `action.guard.recovery.enabled`
 
@@ -102,7 +102,7 @@
 - `RETRYING`
 - `COMPENSATING`
 
-## Related External Config
+## 相关外部配置
 
 虽然不在 starter 自己的 `ActionGuardProperties` 里，但实际接入时通常需要同时配置：
 
@@ -113,6 +113,6 @@
 
 推荐同时参考：
 
-- [Quick Start](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
-- [Module Selection](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
-- [Template Application YAML](/Users/lejinbo/LLM/action-guard/docs/templates/action-guard-minimal-application.yml)
+- [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
+- [模块选择建议](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
+- [应用配置模板 YAML](/Users/lejinbo/LLM/action-guard/docs/templates/action-guard-minimal-application.yml)
