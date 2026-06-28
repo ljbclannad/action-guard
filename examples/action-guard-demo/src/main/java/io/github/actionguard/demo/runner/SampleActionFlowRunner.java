@@ -1,4 +1,4 @@
-package io.github.actionguard.demo;
+package io.github.actionguard.demo.runner;
 
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.ActionRequest;

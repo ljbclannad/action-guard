@@ -1,4 +1,4 @@
-package io.github.actionguard.demo;
+package io.github.actionguard.demo.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.adapter.rabbitmq.RabbitMqActionExecutionConsumer;

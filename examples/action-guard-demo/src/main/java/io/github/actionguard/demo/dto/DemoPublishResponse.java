@@ -1,6 +1,6 @@
-package io.github.actionguard.demo;
+package io.github.actionguard.demo.dto;
 
-public record DemoActionStatusResponse(
+public record DemoPublishResponse(
         String actionInstanceId,
         String actionName,
         String bizKey,

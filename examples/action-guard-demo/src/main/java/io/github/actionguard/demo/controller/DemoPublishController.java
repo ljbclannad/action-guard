@@ -1,10 +1,13 @@
-package io.github.actionguard.demo;
+package io.github.actionguard.demo.controller;
 
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.ActionRequest;
 import io.github.actionguard.api.ActionStepRequest;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
+import io.github.actionguard.demo.dto.DemoActionStatusResponse;
+import io.github.actionguard.demo.dto.DemoPublishRequest;
+import io.github.actionguard.demo.dto.DemoPublishResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

@@ -1,4 +1,4 @@
-package io.github.actionguard.demo;
+package io.github.actionguard.demo.dto;
 
 public record DemoPublishRequest(
         String actionName,
