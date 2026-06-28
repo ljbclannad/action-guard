@@ -30,12 +30,13 @@ import java.util.Optional;
 /**
  * Action 执行回调的核心协调实现。
  *
- * <p>它处在“执行消息到达 -> 推进 action 状态机”的中心位置：消费侧拿到一条
- * {@code ActionExecutionMessage} 后，最终会调用这里，根据当前 action / step 状态、
- * step 定义和 handler 执行结果，决定下一步是成功推进、立即重试、延迟重试还是失败终止。
+ * <p>它处在 {@code consumer -> callback -> handler} 这段链路的中心位置：MQ consumer 拿到并完成基础校验后，
+ * 会把 {@code ActionExecutionMessage} 交给这里；这里再根据当前 action / step 状态定位可执行步骤，
+ * 查找对应的 {@link ActionStepHandler}，并真正触发业务 handler 执行。
  *
- * <p>这个类串起了定义注册表、step handler 注册表、重试策略、outbox 以及可观测性服务，
- * 是 runtime 最核心的状态推进器。它本身不负责消息中间件接入；MQ 适配器只负责把消息送到这里。
+ * <p>handler 返回结果后，这个类继续负责推进 action 状态机，决定下一步是成功推进、立即重试、
+ * 延迟重试还是失败终止，并在需要时复用 outbox 再次投递执行消息。所以它既是 step handler 的调用入口，
+ * 也是整条执行链路的状态编排器。
  */
 public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 

@@ -18,6 +18,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
+/**
+ * RabbitMQ 版执行消息生产者。
+ *
+ * <p>它处在 {@code publish -> MQ} 这半段链路上：starter 在事务提交后拿到 outbox，
+ * 通过 {@link io.github.actionguard.core.runtime.execution.ActionExecutionMessageFactory}
+ * 转成 {@link ActionExecutionMessage}，再由这里序列化并发送到 RabbitMQ exchange。
+ *
+ * <p>发送完成后，这个类的职责就结束了；后续消息路由、消费、回调执行分别由 RabbitMQ、
+ * {@code RabbitMqActionExecutionConsumer} 和 {@code ActionExecutionCallback} 接手。
+ */
 public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMessageProducer {
 
     private static final String MESSAGE_KEY_HEADER = "x-action-guard-message-key";

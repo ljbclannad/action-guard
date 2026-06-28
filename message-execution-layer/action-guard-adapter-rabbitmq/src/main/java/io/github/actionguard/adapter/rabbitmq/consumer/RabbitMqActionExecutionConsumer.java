@@ -18,6 +18,16 @@ import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
+/**
+ * RabbitMQ 版执行消息消费者。
+ *
+ * <p>它处在 {@code MQ -> consumer -> callback} 这段链路上：Spring AMQP 监听配置好的 queue，
+ * 消息到达后由这里完成反序列化、幂等消费记录、ack/retry/dead-letter 决策，然后把真正的执行控制权
+ * 交给 {@link ActionExecutionCallback}。
+ *
+ * <p>因此它本身不实现 action 状态推进逻辑，而是负责把 RabbitMQ 消费模型适配成
+ * Action Guard 的执行回调协议；后续真正调用 step handler 的动作发生在 callback 内部。
+ */
 public class RabbitMqActionExecutionConsumer {
 
     private final ObjectMapper objectMapper;

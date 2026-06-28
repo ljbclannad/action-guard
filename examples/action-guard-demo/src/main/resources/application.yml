@@ -32,6 +32,13 @@ action:
   guard:
     definition-locations:
       - classpath*:actions/*.yml
+    recovery:
+      enabled: true
+      batch-size: 100
+      fixed-delay: 5s
+      claim-timeout: 30s
+      compensation-timeout: 1m
+      stuck-action-timeout: 5m
     rabbitmq:
       exchange: action.guard.execute
       routing-key-prefix: action.execute
