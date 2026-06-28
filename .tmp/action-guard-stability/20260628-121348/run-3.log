@@ -1,0 +1,149 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-06-28T12:13:51.507+08:00  INFO 36823 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Starting ActionGuardDemoApplication using Java 17.0.11 with PID 36823 (/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/target/classes started by lejinbo in /Users/lejinbo/LLM/action-guard/examples/action-guard-demo)
+2026-06-28T12:13:51.509+08:00  INFO 36823 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-06-28T12:13:51.866+08:00  WARN 36823 --- [           main] o.m.s.mapper.ClassPathMapperScanner      : No MyBatis mapper was found in '[io.github.actionguard.demo]' package. Please check your configuration.
+2026-06-28T12:13:52.039+08:00  INFO 36823 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-06-28T12:13:52.046+08:00  INFO 36823 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-28T12:13:52.047+08:00  INFO 36823 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-06-28T12:13:52.074+08:00  INFO 36823 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-06-28T12:13:52.075+08:00  INFO 36823 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 541 ms
+2026-06-28T12:13:52.481+08:00  INFO 36823 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Starting...
+2026-06-28T12:13:58.123+08:00 ERROR 36823 --- [           main] com.zaxxer.hikari.pool.HikariPool        : action-guard-demo-hikari - Exception during pool initialization.
+
+org.h2.jdbc.JdbcSQLNonTransientConnectionException: Error opening database: "Lock file recently modified" [8000-224]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:516) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.message.DbException.get(DbException.java:212) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.getExceptionFatal(FileLock.java:429) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.waitUntilOld(FileLock.java:301) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.lockFile(FileLock.java:318) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.lock(FileLock.java:110) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Database.<init>(Database.java:317) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.openSession(Engine.java:92) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.openSession(Engine.java:222) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.createSession(Engine.java:201) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.SessionRemote.connectEmbeddedOrServer(SessionRemote.java:343) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.jdbc.JdbcConnection.<init>(JdbcConnection.java:125) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.Driver.connect(Driver.java:59) ~[h2-2.2.224.jar:2.2.224]
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:138) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:359) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:201) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:470) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:561) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:100) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:112) ~[HikariCP-5.0.1.jar:na]
+	at org.springframework.jdbc.datasource.DataSourceUtils.fetchConnection(DataSourceUtils.java:160) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.DataSourceUtils.doGetConnection(DataSourceUtils.java:118) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.DataSourceUtils.getConnection(DataSourceUtils.java:81) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.init.DatabasePopulatorUtils.execute(DatabasePopulatorUtils.java:52) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.boot.jdbc.init.DataSourceScriptDatabaseInitializer.runScripts(DataSourceScriptDatabaseInitializer.java:87) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.runScripts(AbstractScriptDatabaseInitializer.java:146) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.applyScripts(AbstractScriptDatabaseInitializer.java:108) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.applySchemaScripts(AbstractScriptDatabaseInitializer.java:98) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.initializeDatabase(AbstractScriptDatabaseInitializer.java:76) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.afterPropertiesSet(AbstractScriptDatabaseInitializer.java:66) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1833) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1782) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:600) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:522) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:326) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:234) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:324) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:200) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:313) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:200) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:975) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:962) ~[spring-context-6.1.6.jar:6.1.6]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:624) ~[spring-context-6.1.6.jar:6.1.6]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:754) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:456) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:334) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1354) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1343) ~[spring-boot-3.2.5.jar:3.2.5]
+	at io.github.actionguard.demo.ActionGuardDemoApplication.main(ActionGuardDemoApplication.java:12) ~[classes/:na]
+
+2026-06-28T12:13:58.125+08:00  WARN 36823 --- [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'dataSourceScriptDatabaseInitializer' defined in class path resource [org/springframework/boot/autoconfigure/sql/init/DataSourceInitializationConfiguration.class]: Failed to execute database script
+2026-06-28T12:13:58.127+08:00  INFO 36823 --- [           main] o.apache.catalina.core.StandardService   : Stopping service [Tomcat]
+2026-06-28T12:13:58.132+08:00  INFO 36823 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-06-28T12:13:58.137+08:00 ERROR 36823 --- [           main] o.s.boot.SpringApplication               : Application run failed
+
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name 'dataSourceScriptDatabaseInitializer' defined in class path resource [org/springframework/boot/autoconfigure/sql/init/DataSourceInitializationConfiguration.class]: Failed to execute database script
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1786) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.doCreateBean(AbstractAutowireCapableBeanFactory.java:600) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.createBean(AbstractAutowireCapableBeanFactory.java:522) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.lambda$doGetBean$0(AbstractBeanFactory.java:326) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.DefaultSingletonBeanRegistry.getSingleton(DefaultSingletonBeanRegistry.java:234) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:324) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:200) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.doGetBean(AbstractBeanFactory.java:313) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractBeanFactory.getBean(AbstractBeanFactory.java:200) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.DefaultListableBeanFactory.preInstantiateSingletons(DefaultListableBeanFactory.java:975) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.context.support.AbstractApplicationContext.finishBeanFactoryInitialization(AbstractApplicationContext.java:962) ~[spring-context-6.1.6.jar:6.1.6]
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:624) ~[spring-context-6.1.6.jar:6.1.6]
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:754) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:456) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:334) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1354) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1343) ~[spring-boot-3.2.5.jar:3.2.5]
+	at io.github.actionguard.demo.ActionGuardDemoApplication.main(ActionGuardDemoApplication.java:12) ~[classes/:na]
+Caused by: org.springframework.jdbc.datasource.init.UncategorizedScriptException: Failed to execute database script
+	at org.springframework.jdbc.datasource.init.DatabasePopulatorUtils.execute(DatabasePopulatorUtils.java:67) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.boot.jdbc.init.DataSourceScriptDatabaseInitializer.runScripts(DataSourceScriptDatabaseInitializer.java:87) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.runScripts(AbstractScriptDatabaseInitializer.java:146) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.applyScripts(AbstractScriptDatabaseInitializer.java:108) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.applySchemaScripts(AbstractScriptDatabaseInitializer.java:98) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.initializeDatabase(AbstractScriptDatabaseInitializer.java:76) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.sql.init.AbstractScriptDatabaseInitializer.afterPropertiesSet(AbstractScriptDatabaseInitializer.java:66) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.invokeInitMethods(AbstractAutowireCapableBeanFactory.java:1833) ~[spring-beans-6.1.6.jar:6.1.6]
+	at org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory.initializeBean(AbstractAutowireCapableBeanFactory.java:1782) ~[spring-beans-6.1.6.jar:6.1.6]
+	... 18 common frames omitted
+Caused by: org.springframework.jdbc.CannotGetJdbcConnectionException: Failed to obtain JDBC Connection
+	at org.springframework.jdbc.datasource.DataSourceUtils.getConnection(DataSourceUtils.java:84) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.init.DatabasePopulatorUtils.execute(DatabasePopulatorUtils.java:52) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	... 26 common frames omitted
+Caused by: org.h2.jdbc.JdbcSQLNonTransientConnectionException: Error opening database: "Lock file recently modified" [8000-224]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:516) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.message.DbException.getJdbcSQLException(DbException.java:489) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.message.DbException.get(DbException.java:212) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.getExceptionFatal(FileLock.java:429) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.waitUntilOld(FileLock.java:301) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.lockFile(FileLock.java:318) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.store.FileLock.lock(FileLock.java:110) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Database.<init>(Database.java:317) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.openSession(Engine.java:92) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.openSession(Engine.java:222) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.Engine.createSession(Engine.java:201) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.engine.SessionRemote.connectEmbeddedOrServer(SessionRemote.java:343) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.jdbc.JdbcConnection.<init>(JdbcConnection.java:125) ~[h2-2.2.224.jar:2.2.224]
+	at org.h2.Driver.connect(Driver.java:59) ~[h2-2.2.224.jar:2.2.224]
+	at com.zaxxer.hikari.util.DriverDataSource.getConnection(DriverDataSource.java:138) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newConnection(PoolBase.java:359) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.PoolBase.newPoolEntry(PoolBase.java:201) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.createPoolEntry(HikariPool.java:470) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.checkFailFast(HikariPool.java:561) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.pool.HikariPool.<init>(HikariPool.java:100) ~[HikariCP-5.0.1.jar:na]
+	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:112) ~[HikariCP-5.0.1.jar:na]
+	at org.springframework.jdbc.datasource.DataSourceUtils.fetchConnection(DataSourceUtils.java:160) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.DataSourceUtils.doGetConnection(DataSourceUtils.java:118) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	at org.springframework.jdbc.datasource.DataSourceUtils.getConnection(DataSourceUtils.java:81) ~[spring-jdbc-6.1.6.jar:6.1.6]
+	... 27 common frames omitted
+
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.2.5:run (default-cli) on project action-guard-demo: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

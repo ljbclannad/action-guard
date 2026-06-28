@@ -1,0 +1,47 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-06-28T12:13:52.080+08:00  INFO 36828 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Starting ActionGuardDemoApplication using Java 17.0.11 with PID 36828 (/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/target/classes started by lejinbo in /Users/lejinbo/LLM/action-guard/examples/action-guard-demo)
+2026-06-28T12:13:52.082+08:00  INFO 36828 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-06-28T12:13:52.359+08:00  WARN 36828 --- [           main] o.m.s.mapper.ClassPathMapperScanner      : No MyBatis mapper was found in '[io.github.actionguard.demo]' package. Please check your configuration.
+2026-06-28T12:13:52.520+08:00  INFO 36828 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-06-28T12:13:52.526+08:00  INFO 36828 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-28T12:13:52.526+08:00  INFO 36828 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-06-28T12:13:52.549+08:00  INFO 36828 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-06-28T12:13:52.549+08:00  INFO 36828 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 445 ms
+2026-06-28T12:13:52.879+08:00  INFO 36828 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Starting...
+2026-06-28T12:13:52.929+08:00  INFO 36828 --- [           main] com.zaxxer.hikari.pool.HikariPool        : action-guard-demo-hikari - Added connection conn0: url=jdbc:h2:file:/Users/lejinbo/.action-guard/demo-db/action_guard_demo user=SA
+2026-06-28T12:13:52.930+08:00  INFO 36828 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Start completed.
+2026-06-28T12:13:52.985+08:00  WARN 36828 --- [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-06-28T12:13:52.985+08:00  INFO 36828 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown initiated...
+2026-06-28T12:13:52.986+08:00  INFO 36828 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown completed.
+2026-06-28T12:13:52.993+08:00  INFO 36828 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-06-28T12:13:52.997+08:00 ERROR 36828 --- [           main] o.s.b.d.LoggingFailureAnalysisReporter   : 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Web server failed to start. Port 8080 was already in use.
+
+Action:
+
+Identify and stop the process that's listening on port 8080 or configure this application to listen on another port.
+
+[ERROR] Failed to execute goal org.springframework.boot:spring-boot-maven-plugin:3.2.5:run (default-cli) on project action-guard-demo: Process terminated with exit code: 1 -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

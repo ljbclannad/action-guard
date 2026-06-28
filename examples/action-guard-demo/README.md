@@ -64,14 +64,19 @@ bash scripts/run-demo-stability.sh
 
 - 先执行一次 `compile`
 - 然后并发启动多次 demo 实例
+- 每个实例都会分配独立 `SERVER_PORT`
+- 每个实例都会分配独立 `DEMO_H2_PATH`
 - 每个实例都会真实走一条 `publish -> RabbitMQ -> runtime -> SUCCESS` 链路
 - 最后在 `.tmp/action-guard-stability/<timestamp>/` 下输出分 run 日志，并汇总成功/失败数
+
+这样可以避免并发验证时出现固定 `8080` 端口冲突，或多个实例共用同一个 H2 文件库导致的锁冲突。
 
 可用环境变量：
 
 ```bash
 ACTION_GUARD_STABILITY_RUNS
 ACTION_GUARD_STABILITY_PARALLELISM
+ACTION_GUARD_STABILITY_BASE_PORT
 ACTION_GUARD_STABILITY_BUILD_FIRST
 ACTION_GUARD_STABILITY_LOG_DIR
 ```

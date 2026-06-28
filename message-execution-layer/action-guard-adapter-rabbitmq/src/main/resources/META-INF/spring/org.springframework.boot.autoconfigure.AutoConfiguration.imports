@@ -1,1 +1,1 @@
-io.github.actionguard.adapter.rabbitmq.RabbitMqActionExecutionAutoConfiguration
+io.github.actionguard.adapter.rabbitmq.config.RabbitMqActionExecutionAutoConfiguration

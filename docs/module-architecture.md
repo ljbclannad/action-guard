@@ -77,6 +77,19 @@ flowchart LR
 - retry / compensation / observability
 - recovery 扫描与 fencing 语义
 
+当前模块内包结构：
+
+- `core.model`
+- `core.repository`
+- `core.runtime.publish`
+- `core.runtime.execution`
+- `core.runtime.definition`
+- `core.runtime.compensation`
+- `core.runtime.recovery`
+- `core.runtime.observability`
+- `core.runtime.registry`
+- `core.runtime.retry`
+
 ### `action-guard-spring-boot-starter`
 
 负责 Spring Boot 自动装配：
@@ -85,6 +98,14 @@ flowchart LR
 - 收集 handlers / senders
 - 组装 registry 和 runtime
 - 暴露统一配置入口
+
+当前模块内包结构：
+
+- `starter.config`
+- `starter.properties`
+- `starter.publisher`
+- `starter.scheduler`
+- `starter.metrics`
 
 ### `action-guard-store-mysql`
 
@@ -107,6 +128,14 @@ flowchart LR
 - 重复消费保护对接
 - dead-letter / consume-failure 事件接入
 
+当前模块内包结构：
+
+- `adapter.rabbitmq.config`
+- `adapter.rabbitmq.producer`
+- `adapter.rabbitmq.consumer`
+- `adapter.rabbitmq.support`
+- `adapter.rabbitmq.handler`
+
 ### `action-guard-adapter-notify`
 
 负责通知能力抽象：
@@ -114,6 +143,13 @@ flowchart LR
 - `NOTIFY_IN_APP_SEND`
 - `NOTIFY_SMS_SEND`
 - `NOTIFY_EMAIL_SEND`
+
+当前模块内包结构：
+
+- `notify.config`
+- `notify.handler`
+- `notify.sender`
+- `notify.model`
 
 ### `action-guard-adapter-im`
 
@@ -123,9 +159,22 @@ flowchart LR
 - `IM_GROUP_INVITE`
 - `IM_GROUP_MESSAGE_SEND`
 
+当前模块内包结构：
+
+- `im.config`
+- `im.handler`
+- `im.sender`
+- `im.model`
+
 ### `action-guard-alert-webhook`
 
 负责把标准化告警事件投递到外部 webhook。
+
+当前模块内包结构：
+
+- `alert.webhook.config`
+- `alert.webhook.properties`
+- `alert.webhook.publisher`
 
 ### `action-guard-ops-api`
 
@@ -135,6 +184,16 @@ flowchart LR
 - 详情查询
 - retry / skip / cancel / compensate
 - audit log query
+
+当前模块内包结构：
+
+- `ops.api.config`
+- `ops.api.controller`
+- `ops.api.model`
+- `ops.api.service`
+- `ops.api.repository`
+- `ops.api.repository.jdbc`
+- `ops.api.support`
 
 ## 推荐阅读顺序
 

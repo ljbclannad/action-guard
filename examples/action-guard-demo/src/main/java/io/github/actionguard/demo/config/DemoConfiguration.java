@@ -1,15 +1,15 @@
 package io.github.actionguard.demo.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.actionguard.adapter.rabbitmq.RabbitMqActionExecutionConsumer;
-import io.github.actionguard.adapter.rabbitmq.ActionGuardRabbitMqProperties;
-import io.github.actionguard.adapter.rabbitmq.RabbitMqConsumeStrategy;
-import io.github.actionguard.notify.NotifySendResult;
-import io.github.actionguard.notify.NotifySmsRequest;
-import io.github.actionguard.notify.NotifySmsSender;
+import io.github.actionguard.adapter.rabbitmq.config.ActionGuardRabbitMqProperties;
+import io.github.actionguard.adapter.rabbitmq.consumer.RabbitMqActionExecutionConsumer;
+import io.github.actionguard.adapter.rabbitmq.support.RabbitMqConsumeStrategy;
+import io.github.actionguard.notify.model.NotifySendResult;
+import io.github.actionguard.notify.model.NotifySmsRequest;
+import io.github.actionguard.notify.sender.NotifySmsSender;
 import io.github.actionguard.core.repository.ActionConsumeLogRepository;
-import io.github.actionguard.core.runtime.ActionObservabilityService;
-import io.github.actionguard.core.runtime.ActionExecutionCallback;
+import io.github.actionguard.core.runtime.execution.ActionExecutionCallback;
+import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Declarables;

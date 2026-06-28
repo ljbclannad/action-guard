@@ -196,4 +196,60 @@ steps:
 - `action-guard-ops-web`：治理控制台应用
 - `action-guard-demo`：示例应用
 
+## 模块内包结构约定
+
+当前仓库已经按模块职责把主要包结构收敛为以下约定，后续新增代码建议优先沿用：
+
+- `action-guard-core`
+  - `core.model`
+  - `core.repository`
+  - `core.runtime.publish`
+  - `core.runtime.execution`
+  - `core.runtime.definition`
+  - `core.runtime.compensation`
+  - `core.runtime.recovery`
+  - `core.runtime.observability`
+  - `core.runtime.registry`
+  - `core.runtime.retry`
+- `action-guard-spring-boot-starter`
+  - `starter.config`
+  - `starter.properties`
+  - `starter.publisher`
+  - `starter.scheduler`
+  - `starter.metrics`
+- `action-guard-adapter-rabbitmq`
+  - `adapter.rabbitmq.config`
+  - `adapter.rabbitmq.producer`
+  - `adapter.rabbitmq.consumer`
+  - `adapter.rabbitmq.support`
+  - `adapter.rabbitmq.handler`
+- `action-guard-adapter-notify`
+  - `notify.config`
+  - `notify.handler`
+  - `notify.sender`
+  - `notify.model`
+- `action-guard-adapter-im`
+  - `im.config`
+  - `im.handler`
+  - `im.sender`
+  - `im.model`
+- `action-guard-alert-webhook`
+  - `alert.webhook.config`
+  - `alert.webhook.properties`
+  - `alert.webhook.publisher`
+- `action-guard-ops-api`
+  - `ops.api.config`
+  - `ops.api.controller`
+  - `ops.api.model`
+  - `ops.api.service`
+  - `ops.api.repository`
+  - `ops.api.repository.jdbc`
+  - `ops.api.support`
+- `action-guard-demo`
+  - `demo.config`
+  - `demo.controller`
+  - `demo.dto`
+  - `demo.runner`
+
+更详细的模块说明见：[模块架构](./docs/module-architecture.md)
 

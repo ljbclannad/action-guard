@@ -1,1 +1,1 @@
-io.github.actionguard.alert.webhook.WebhookActionAlertAutoConfiguration
+io.github.actionguard.alert.webhook.config.WebhookActionAlertAutoConfiguration

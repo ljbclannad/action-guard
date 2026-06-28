@@ -8,14 +8,15 @@ LOG_ROOT="${ACTION_GUARD_STABILITY_LOG_DIR:-$ROOT_DIR/.tmp/action-guard-stabilit
 RUNS="${ACTION_GUARD_STABILITY_RUNS:-10}"
 PARALLELISM="${ACTION_GUARD_STABILITY_PARALLELISM:-3}"
 BUILD_FIRST="${ACTION_GUARD_STABILITY_BUILD_FIRST:-true}"
+BASE_PORT="${ACTION_GUARD_STABILITY_BASE_PORT:-18080}"
 
 if ! command -v mvn >/dev/null 2>&1; then
   echo "mvn is required but not found in PATH" >&2
   exit 1
 fi
 
-if ! [[ "$RUNS" =~ ^[0-9]+$ ]] || ! [[ "$PARALLELISM" =~ ^[0-9]+$ ]] || [ "$RUNS" -le 0 ] || [ "$PARALLELISM" -le 0 ]; then
-  echo "ACTION_GUARD_STABILITY_RUNS and ACTION_GUARD_STABILITY_PARALLELISM must be positive integers" >&2
+if ! [[ "$RUNS" =~ ^[0-9]+$ ]] || ! [[ "$PARALLELISM" =~ ^[0-9]+$ ]] || ! [[ "$BASE_PORT" =~ ^[0-9]+$ ]] || [ "$RUNS" -le 0 ] || [ "$PARALLELISM" -le 0 ] || [ "$BASE_PORT" -le 0 ]; then
+  echo "ACTION_GUARD_STABILITY_RUNS, ACTION_GUARD_STABILITY_PARALLELISM, and ACTION_GUARD_STABILITY_BASE_PORT must be positive integers" >&2
   exit 1
 fi
 
@@ -26,6 +27,7 @@ mkdir -p "$RUN_DIR"
 echo "stability run dir: $RUN_DIR"
 echo "runs=$RUNS parallelism=$PARALLELISM"
 echo "demo database mode: H2 file (override with DEMO_H2_PATH if needed)"
+echo "base port=$BASE_PORT"
 
 if [ "$BUILD_FIRST" = "true" ]; then
   echo "building demo dependencies once before burst run..."
@@ -35,22 +37,47 @@ fi
 run_one() {
   local index="$1"
   local log_file="$RUN_DIR/run-${index}.log"
+  local run_db_dir="$RUN_DIR/h2/run-${index}"
+  local run_db_path="$run_db_dir/action_guard_demo"
+  local run_port=$((BASE_PORT + index - 1))
+  mkdir -p "$run_db_dir"
   (
     cd "$ROOT_DIR"
+    DEMO_H2_PATH="$run_db_path" \
+    SERVER_PORT="$run_port" \
     mvn -q -f "$DEMO_POM" spring-boot:run >"$log_file" 2>&1
   )
 }
 
-active_jobs=0
+active_pids=()
+
+reap_finished_jobs() {
+  local remaining=()
+  local pid
+  for pid in "${active_pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      remaining+=("$pid")
+    fi
+  done
+  if [ "${#remaining[@]}" -eq 0 ]; then
+    active_pids=()
+  else
+    active_pids=("${remaining[@]}")
+  fi
+}
+
 for index in $(seq 1 "$RUNS"); do
   run_one "$index" &
-  active_jobs=$((active_jobs + 1))
-  if [ "$active_jobs" -ge "$PARALLELISM" ]; then
-    wait -n || true
-    active_jobs=$((active_jobs - 1))
-  fi
+  active_pids+=("$!")
+  while [ "${#active_pids[@]}" -ge "$PARALLELISM" ]; do
+    sleep 1
+    reap_finished_jobs
+  done
 done
-wait || true
+
+for pid in "${active_pids[@]}"; do
+  wait "$pid" || true
+done
 
 success_count=0
 failure_count=0

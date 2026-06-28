@@ -8,9 +8,9 @@ import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
-import io.github.actionguard.core.runtime.ActionCompensationExecutor;
-import io.github.actionguard.core.runtime.ActionExecutionMessageProducer;
-import io.github.actionguard.core.runtime.ActionObservabilityService;
+import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
+import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import io.github.actionguard.ops.api.support.ActionCommandValidator;
 
 import java.time.Instant;

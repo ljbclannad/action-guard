@@ -1,0 +1,32 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-06-28T12:16:17.577+08:00  INFO 48204 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Starting ActionGuardDemoApplication using Java 17.0.11 with PID 48204 (/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/target/classes started by lejinbo in /Users/lejinbo/LLM/action-guard/examples/action-guard-demo)
+2026-06-28T12:16:17.578+08:00  INFO 48204 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-06-28T12:16:17.826+08:00  WARN 48204 --- [           main] o.m.s.mapper.ClassPathMapperScanner      : No MyBatis mapper was found in '[io.github.actionguard.demo]' package. Please check your configuration.
+2026-06-28T12:16:17.959+08:00  INFO 48204 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 18080 (http)
+2026-06-28T12:16:17.963+08:00  INFO 48204 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-06-28T12:16:17.963+08:00  INFO 48204 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-06-28T12:16:17.981+08:00  INFO 48204 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-06-28T12:16:17.982+08:00  INFO 48204 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 386 ms
+2026-06-28T12:16:18.294+08:00  INFO 48204 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Starting...
+2026-06-28T12:16:18.430+08:00  INFO 48204 --- [           main] com.zaxxer.hikari.pool.HikariPool        : action-guard-demo-hikari - Added connection conn1: url=jdbc:h2:file:/Users/lejinbo/LLM/action-guard/.tmp/action-guard-stability/20260628-121614/h2/run-1/action_guard_demo user=SA
+2026-06-28T12:16:18.431+08:00  INFO 48204 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Start completed.
+2026-06-28T12:16:18.483+08:00  INFO 48204 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 18080 (http) with context path ''
+2026-06-28T12:16:18.485+08:00  INFO 48204 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-06-28T12:16:18.500+08:00  INFO 48204 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#64e1377c:0/SimpleConnection@37ffe4f3 [delegate=amqp://guest@127.0.0.1:5672/, localPort=56675]
+2026-06-28T12:16:18.521+08:00  INFO 48204 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Started ActionGuardDemoApplication in 1.094 seconds (process running for 1.21)
+send sms to [13800000000] template=demo-notify
+actionName=demo-notify-success
+bizKey=order:demo-1782620178522
+status=SUCCESS
+2026-06-28T12:16:18.749+08:00  INFO 48204 --- [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Waiting for workers to finish.
+2026-06-28T12:16:19.560+08:00  INFO 48204 --- [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Successfully waited for workers to finish.
+2026-06-28T12:16:19.571+08:00  INFO 48204 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown initiated...
+2026-06-28T12:16:19.579+08:00  INFO 48204 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown completed.
