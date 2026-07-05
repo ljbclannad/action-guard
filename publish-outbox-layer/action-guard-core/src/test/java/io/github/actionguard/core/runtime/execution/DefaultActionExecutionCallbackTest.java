@@ -22,9 +22,11 @@ import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
+import io.github.actionguard.core.model.ActionTransitionLog;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
+import io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -39,6 +41,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DefaultActionExecutionCallbackTest {
+
+    @Test
+    void shouldUseProvidedTransitionLogRepositoryInCompatibilityConstructor() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionTransitionLogRepository transitionLogRepository = new InMemoryActionTransitionLogRepository();
+        CapturingActionExecutionMessageProducer producer = new CapturingActionExecutionMessageProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.NEW, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionStepInstanceRepository.save(new ActionStepInstance(
+                "step-1", "act-1", 0, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(), null, null,
+                0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T09:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        DefaultActionExecutionCallback callback = new DefaultActionExecutionCallback(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                definitionRegistry("order-cancel-flow", List.of(stepDefinition("send-user-sms", "SMS"))),
+                new StepHandlerRegistry(List.of(new SuccessHandler("SMS"))),
+                new RetryCurrentStepPolicy(3),
+                actionOutboxRepository,
+                transitionLogRepository,
+                Optional.of(producer),
+                Clock.fixed(Instant.parse("2026-06-26T09:01:00Z"), ZoneOffset.UTC)
+        );
+
+        callback.execute(new ActionExecutionMessage("ACTION_EXECUTE:outbox-1", "ACTION_EXECUTE:act-1", "outbox-1", "act-1", "ACTION_EXECUTE", Instant.parse("2026-06-26T09:00:00Z")));
+
+        List<ActionTransitionLog> logs = transitionLogRepository.findByActionInstanceId("act-1");
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).toStatus()).isEqualTo(ActionStatus.SUCCESS);
+    }
 
     @Test
     void shouldAdvanceToNextStepAfterSuccessfulExecution() {
@@ -164,6 +204,48 @@ class DefaultActionExecutionCallbackTest {
         assertThat(step.lastErrorCode()).isEqualTo("DOWNSTREAM_ERROR");
         assertThat(producer.published()).hasSize(1);
         assertThat(producer.published().get(0).id()).isEqualTo("outbox-1");
+    }
+
+    @Test
+    void shouldPersistFailureWhenHandlerThrowsException() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        CapturingActionExecutionMessageProducer producer = new CapturingActionExecutionMessageProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.NEW, 0, 1, Map.of(),
+                null, null, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionStepInstanceRepository.save(new ActionStepInstance(
+                "step-1", "act-1", 0, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(), null, null,
+                0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T09:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T09:00:00Z"), Instant.parse("2026-06-26T09:00:00Z")
+        ));
+        DefaultActionExecutionCallback callback = new DefaultActionExecutionCallback(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                definitionRegistry("order-cancel-flow", List.of(stepDefinition("send-user-sms", "SMS"))),
+                new StepHandlerRegistry(List.of(new ThrowingHandler("SMS"))),
+                new RetryCurrentStepPolicy(3),
+                actionOutboxRepository,
+                Optional.of(producer),
+                Clock.fixed(Instant.parse("2026-06-26T09:01:00Z"), ZoneOffset.UTC)
+        );
+
+        callback.execute(new ActionExecutionMessage("ACTION_EXECUTE:outbox-1", "ACTION_EXECUTE:act-1", "outbox-1", "act-1", "ACTION_EXECUTE", Instant.parse("2026-06-26T09:00:00Z")));
+
+        ActionInstance updated = actionInstanceRepository.findById("act-1").orElseThrow();
+        ActionStepInstance step = actionStepInstanceRepository.findByActionInstanceId("act-1").get(0);
+        assertThat(updated.status()).isEqualTo(ActionStatus.RETRYING);
+        assertThat(updated.lastErrorCode()).isEqualTo("STEP_EXECUTION_EXCEPTION");
+        assertThat(updated.lastErrorMessage()).isEqualTo("payload missing");
+        assertThat(step.status()).isEqualTo(ActionStepStatus.FAILED);
+        assertThat(step.lastErrorCode()).isEqualTo("STEP_EXECUTION_EXCEPTION");
+        assertThat(step.lastErrorMessage()).isEqualTo("payload missing");
+        assertThat(producer.published()).hasSize(1);
     }
 
     @Test
@@ -535,6 +617,13 @@ class DefaultActionExecutionCallbackTest {
         @Override
         public StepExecutionResult execute(ActionStepContext context) {
             return StepExecutionResult.failed("DOWNSTREAM_ERROR", "sms provider failed");
+        }
+    }
+
+    private record ThrowingHandler(String stepType) implements ActionStepHandler {
+        @Override
+        public StepExecutionResult execute(ActionStepContext context) {
+            throw new IllegalArgumentException("payload missing");
         }
     }
 

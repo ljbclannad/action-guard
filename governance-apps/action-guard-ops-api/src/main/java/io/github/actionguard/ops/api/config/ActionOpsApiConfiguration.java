@@ -4,6 +4,7 @@ import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
@@ -50,9 +51,10 @@ public class ActionOpsApiConfiguration {
     @Bean
     ActionQueryService actionQueryService(
             ActionOpsQueryRepository actionOpsQueryRepository,
-            ActionCompensationLogQueryRepository actionCompensationLogQueryRepository
+            ActionCompensationLogQueryRepository actionCompensationLogQueryRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository
     ) {
-        return new ActionQueryService(actionOpsQueryRepository, actionCompensationLogQueryRepository);
+        return new ActionQueryService(actionOpsQueryRepository, actionCompensationLogQueryRepository, actionTransitionLogRepository);
     }
 
     @Bean
@@ -74,7 +76,8 @@ public class ActionOpsApiConfiguration {
             ActionAuditService actionAuditService,
             Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
             ActionCompensationExecutor actionCompensationExecutor,
-            ActionObservabilityService actionObservabilityService
+            ActionObservabilityService actionObservabilityService,
+            ActionTransitionLogRepository actionTransitionLogRepository
     ) {
         return new ActionCommandService(
                 actionInstanceRepository,
@@ -84,7 +87,8 @@ public class ActionOpsApiConfiguration {
                 actionAuditService,
                 actionExecutionMessageProducer,
                 actionCompensationExecutor,
-                actionObservabilityService
+                actionObservabilityService,
+                actionTransitionLogRepository
         );
     }
 }

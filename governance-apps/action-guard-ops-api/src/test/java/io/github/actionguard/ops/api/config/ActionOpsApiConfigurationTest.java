@@ -4,6 +4,7 @@ import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
@@ -133,6 +134,11 @@ class ActionOpsApiConfigurationTest {
         @Bean
         ActionStepInstanceRepository actionStepInstanceRepository() {
             return org.mockito.Mockito.mock(ActionStepInstanceRepository.class);
+        }
+
+        @Bean
+        ActionTransitionLogRepository actionTransitionLogRepository() {
+            return org.mockito.Mockito.mock(ActionTransitionLogRepository.class);
         }
 
         @Bean

@@ -10,12 +10,14 @@ import io.github.actionguard.core.repository.ActionConsumeLogRepository;
 import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.repository.InMemoryActionCompensationLogRepository;
 import io.github.actionguard.core.repository.InMemoryActionConsumeLogRepository;
 import io.github.actionguard.core.repository.InMemoryActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
+import io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationService;
 import io.github.actionguard.core.runtime.compensation.ActionCompensatorRegistry;
 import io.github.actionguard.core.runtime.definition.ActionDefinitionLoader;
@@ -190,6 +192,7 @@ public class ActionGuardAutoConfiguration {
             ActionDefinitionRegistry actionDefinitionRegistry,
             ActionGovernancePolicyRepository actionGovernancePolicyRepository,
             ActionCompensationLogRepository actionCompensationLogRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
             ActionCompensatorRegistry actionCompensatorRegistry,
             ActionObservabilityService actionObservabilityService,
             Clock clock
@@ -200,6 +203,7 @@ public class ActionGuardAutoConfiguration {
                 actionDefinitionRegistry,
                 actionGovernancePolicyRepository,
                 actionCompensationLogRepository,
+                actionTransitionLogRepository,
                 actionCompensatorRegistry,
                 actionObservabilityService,
                 clock
@@ -224,6 +228,7 @@ public class ActionGuardAutoConfiguration {
             StepHandlerRegistry stepHandlerRegistry,
             ActionRetryPolicy actionRetryPolicy,
             ActionOutboxRepository actionOutboxRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
             Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
             ActionObservabilityService actionObservabilityService,
             Clock clock
@@ -236,6 +241,7 @@ public class ActionGuardAutoConfiguration {
                 stepHandlerRegistry,
                 actionRetryPolicy,
                 actionOutboxRepository,
+                actionTransitionLogRepository,
                 actionExecutionMessageProducer,
                 actionObservabilityService,
                 clock
@@ -276,6 +282,12 @@ public class ActionGuardAutoConfiguration {
     @ConditionalOnMissingBean
     public ActionCompensationLogRepository actionCompensationLogRepository() {
         return new InMemoryActionCompensationLogRepository();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ActionTransitionLogRepository actionTransitionLogRepository() {
+        return new InMemoryActionTransitionLogRepository();
     }
 
     @Bean

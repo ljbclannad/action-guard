@@ -17,6 +17,7 @@ public record ActionDetailView(
         Instant createdAt,
         Instant updatedAt,
         List<StepDetailView> steps,
-        List<ConsumeDetailView> consumes
+        List<ConsumeDetailView> consumes,
+        List<ActionTimelineEventView> timeline
 ) {
 }

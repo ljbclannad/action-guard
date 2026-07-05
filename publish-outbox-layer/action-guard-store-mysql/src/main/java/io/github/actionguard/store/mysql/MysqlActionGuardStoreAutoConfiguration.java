@@ -7,6 +7,7 @@ import io.github.actionguard.core.repository.ActionConsumeLogRepository;
 import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.store.mysql.mapper.ActionConsumeLogMapper;
 import io.github.actionguard.store.mysql.mapper.ActionInstanceMapper;
 import io.github.actionguard.store.mysql.mapper.ActionOutboxMapper;
@@ -57,5 +58,10 @@ public class MysqlActionGuardStoreAutoConfiguration {
     @Bean
     public ActionCompensationLogRepository actionCompensationLogRepository(JdbcTemplate jdbcTemplate) {
         return new MysqlActionCompensationLogRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public ActionTransitionLogRepository actionTransitionLogRepository(JdbcTemplate jdbcTemplate) {
+        return new MysqlActionTransitionLogRepository(jdbcTemplate);
     }
 }

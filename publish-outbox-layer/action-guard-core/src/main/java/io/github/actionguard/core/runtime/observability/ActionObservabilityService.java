@@ -8,6 +8,7 @@ import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
 import io.github.actionguard.core.model.ActionStepInstance;
+import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 
 import java.time.Clock;
 import java.util.LinkedHashMap;
@@ -197,6 +198,16 @@ public class ActionObservabilityService {
                 "actionName", nullSafe(actionInstance.actionName()),
                 "stepType", "unknown",
                 "result", "compensated"
+        ));
+    }
+
+    public void actionTransition(ActionTransitionResult transitionResult) {
+        increment("action.guard.action.transition", Map.of(
+                "actionName", nullSafe(transitionResult.actionInstance().actionName()),
+                "stepType", "unknown",
+                "fromStatus", transitionResult.fromStatus().name(),
+                "toStatus", transitionResult.toStatus().name(),
+                "event", transitionResult.event().name()
         ));
     }
 

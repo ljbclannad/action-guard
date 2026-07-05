@@ -76,7 +76,8 @@ public class JdbcActionOpsQueryRepository implements ActionOpsQueryRepository {
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getTimestamp("updated_at").toInstant(),
                         getSteps(actionInstanceId),
-                        getConsumes(actionInstanceId)
+                        getConsumes(actionInstanceId),
+                        List.of()
                 ),
                 actionInstanceId
         );

@@ -15,11 +15,16 @@ import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
+import io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import io.github.actionguard.core.runtime.registry.StepHandlerRegistry;
+import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
+import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
+import io.github.actionguard.core.runtime.state.ActionTransitionService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -46,31 +51,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private final StepHandlerRegistry stepHandlerRegistry;
     private final ActionRetryPolicy actionRetryPolicy;
     private final ActionOutboxRepository actionOutboxRepository;
+    private final ActionTransitionLogRepository actionTransitionLogRepository;
     private final Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer;
     private final ActionObservabilityService actionObservabilityService;
+    private final ActionTransitionService actionTransitionService;
+    private final ActionExecutionRuntimeService actionExecutionRuntimeService;
     private final Clock clock;
-
-    public DefaultActionExecutionCallback(
-            ActionInstanceRepository actionInstanceRepository,
-            ActionStepInstanceRepository actionStepInstanceRepository,
-            ActionDefinitionRegistry actionDefinitionRegistry,
-            StepHandlerRegistry stepHandlerRegistry,
-            ActionRetryPolicy actionRetryPolicy,
-            ActionOutboxRepository actionOutboxRepository,
-            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
-            ActionObservabilityService actionObservabilityService,
-            Clock clock
-    ) {
-        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
-        this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
-        this.actionDefinitionRegistry = Objects.requireNonNull(actionDefinitionRegistry, "actionDefinitionRegistry must not be null");
-        this.stepHandlerRegistry = Objects.requireNonNull(stepHandlerRegistry, "stepHandlerRegistry must not be null");
-        this.actionRetryPolicy = Objects.requireNonNull(actionRetryPolicy, "actionRetryPolicy must not be null");
-        this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
-        this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
-        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
-    }
 
     public DefaultActionExecutionCallback(
             ActionInstanceRepository actionInstanceRepository,
@@ -89,6 +75,90 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 stepHandlerRegistry,
                 actionRetryPolicy,
                 actionOutboxRepository,
+                new InMemoryActionTransitionLogRepository(),
+                actionExecutionMessageProducer,
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), clock),
+                clock
+        );
+    }
+
+    public DefaultActionExecutionCallback(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            StepHandlerRegistry stepHandlerRegistry,
+            ActionRetryPolicy actionRetryPolicy,
+            ActionOutboxRepository actionOutboxRepository,
+            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
+            ActionObservabilityService actionObservabilityService,
+            Clock clock
+    ) {
+        this(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                actionDefinitionRegistry,
+                stepHandlerRegistry,
+                actionRetryPolicy,
+                actionOutboxRepository,
+                new InMemoryActionTransitionLogRepository(),
+                actionExecutionMessageProducer,
+                actionObservabilityService,
+                clock
+        );
+    }
+
+    public DefaultActionExecutionCallback(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            StepHandlerRegistry stepHandlerRegistry,
+            ActionRetryPolicy actionRetryPolicy,
+            ActionOutboxRepository actionOutboxRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
+            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
+            ActionObservabilityService actionObservabilityService,
+            Clock clock
+    ) {
+        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
+        this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
+        this.actionDefinitionRegistry = Objects.requireNonNull(actionDefinitionRegistry, "actionDefinitionRegistry must not be null");
+        this.stepHandlerRegistry = Objects.requireNonNull(stepHandlerRegistry, "stepHandlerRegistry must not be null");
+        this.actionRetryPolicy = Objects.requireNonNull(actionRetryPolicy, "actionRetryPolicy must not be null");
+        this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
+        this.actionTransitionLogRepository = Objects.requireNonNull(actionTransitionLogRepository, "actionTransitionLogRepository must not be null");
+        this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
+        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+        this.actionTransitionService = new ActionTransitionService(
+                this.actionInstanceRepository,
+                this.actionTransitionLogRepository,
+                this.actionObservabilityService
+        );
+        this.actionExecutionRuntimeService = new ActionExecutionRuntimeService(
+                this.actionStepInstanceRepository,
+                this.actionTransitionService
+        );
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
+    public DefaultActionExecutionCallback(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            StepHandlerRegistry stepHandlerRegistry,
+            ActionRetryPolicy actionRetryPolicy,
+            ActionOutboxRepository actionOutboxRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
+            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
+            Clock clock
+    ) {
+        this(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                actionDefinitionRegistry,
+                stepHandlerRegistry,
+                actionRetryPolicy,
+                actionOutboxRepository,
+                actionTransitionLogRepository,
                 actionExecutionMessageProducer,
                 new ActionObservabilityService(Optional.empty(), Optional.empty(), clock),
                 clock
@@ -119,15 +189,20 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         ActionStepDefinition stepDefinition = resolveStepDefinition(actionInstance, currentStep);
         ActionStepHandler handler = stepHandlerRegistry.getRequired(currentStep.stepType());
         Instant startedAt = clock.instant();
-        StepExecutionResult result = handler.execute(new ActionStepContext(
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                currentStep.stepName(),
-                currentStep.stepType(),
-                currentStep.target(),
-                actionInstance.attributes(),
-                currentStep.payload()
-        ));
+        StepExecutionResult result;
+        try {
+            result = handler.execute(new ActionStepContext(
+                    actionInstance.actionName(),
+                    actionInstance.bizKey(),
+                    currentStep.stepName(),
+                    currentStep.stepType(),
+                    currentStep.target(),
+                    actionInstance.attributes(),
+                    currentStep.payload()
+            ));
+        } catch (RuntimeException ex) {
+            result = StepExecutionResult.failed("STEP_EXECUTION_EXCEPTION", normalizedThrowableMessage(ex));
+        }
         Instant completedAt = clock.instant();
         StepExecutionResult effectiveResult = applyTimeoutIfExceeded(result, stepDefinition, startedAt, completedAt);
 
@@ -140,44 +215,19 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
     private void handleStepSuccess(ActionInstance actionInstance, ActionStepInstance currentStep) {
         Instant now = clock.instant();
-        // 先把 step 标记为成功，再推进 action 状态。
-        // 这样即使后续推进下一步失败，治理侧也能明确看到当前 step 已经完成。
-        actionStepInstanceRepository.save(new ActionStepInstance(
-                currentStep.id(),
-                currentStep.actionInstanceId(),
-                currentStep.stepIndex(),
-                currentStep.stepName(),
-                currentStep.stepType(),
-                currentStep.target(),
-                ActionStepStatus.SUCCESS,
-                currentStep.attemptCount() + 1,
-                currentStep.payload(),
-                null,
-                null,
-                currentStep.version(),
-                currentStep.createdAt(),
-                now
-        ));
-        actionObservabilityService.stepSucceeded(actionInstance, currentStep);
-
         int nextStepIndex = currentStep.stepIndex() + 1;
-        ActionStatus nextStatus = nextStepIndex >= actionInstance.totalStepCount() ? ActionStatus.SUCCESS : ActionStatus.DISPATCHING;
-        ActionInstance advanced = actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                nextStatus,
+        ActionExecutionProgress progress = actionExecutionRuntimeService.completeStepSuccess(
+                actionInstance,
+                currentStep,
                 nextStepIndex,
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                null,
-                null,
-                actionInstance.version(),
-                actionInstance.createdAt(),
                 now
-        ));
+        );
+        actionObservabilityService.stepSucceeded(actionInstance, progress.stepInstance());
+        ActionTransitionExecution transitionExecution = progress.transitionExecution();
+        ActionInstance advanced = transitionExecution.transitionResult().actionInstance();
+        ActionStatus nextStatus = advanced.status();
         if (nextStatus == ActionStatus.SUCCESS) {
-            actionObservabilityService.actionSucceeded(advanced, currentStep);
+            actionObservabilityService.actionSucceeded(advanced, progress.stepInstance());
         }
         if (nextStatus == ActionStatus.DISPATCHING) {
             // 只有在还有后续 step 时才继续投递下一条执行消息，第一版始终保持严格串行。
@@ -194,22 +244,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         Instant now = clock.instant();
         String errorMessage = normalizedErrorMessage(result);
         // 失败先落到 step 实例，后续 retry / fail-fast / compensate 的决策都基于这次持久化结果。
-        ActionStepInstance failedStep = actionStepInstanceRepository.save(new ActionStepInstance(
-                currentStep.id(),
-                currentStep.actionInstanceId(),
-                currentStep.stepIndex(),
-                currentStep.stepName(),
-                currentStep.stepType(),
-                currentStep.target(),
-                ActionStepStatus.FAILED,
-                currentStep.attemptCount() + 1,
-                currentStep.payload(),
-                result.errorCode(),
+        ActionStepInstance failedStep = actionExecutionRuntimeService.persistFailedStep(
+                currentStep,
+                result,
                 errorMessage,
-                currentStep.version(),
-                currentStep.createdAt(),
                 now
-        ));
+        );
         int maxRetryCount = stepDefinition.maxRetryCount() == null ? Integer.MAX_VALUE : stepDefinition.maxRetryCount();
         ActionRetryAction retryAction = actionRetryPolicy.decide(
                 new StepExecutionException(result.errorCode(), errorMessage),
@@ -221,39 +261,32 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         actionObservabilityService.stepFailed(actionInstance, failedStep, result.errorCode());
         if (retryAction == ActionRetryAction.IMMEDIATE_RETRY || retryAction == ActionRetryAction.DELAY_RETRY) {
             // retry 不会创建新的 action，而是把同一个 action 重新置为 RETRYING，并复用原 outbox 重新调度。
-            ActionInstance retrying = actionInstanceRepository.save(new ActionInstance(
-                    actionInstance.id(),
-                    actionInstance.actionName(),
-                    actionInstance.bizKey(),
-                    ActionStatus.RETRYING,
-                    currentStep.stepIndex(),
-                    actionInstance.totalStepCount(),
-                    actionInstance.attributes(),
-                    result.errorCode(),
+            ActionTransitionExecution retryTransition = actionExecutionRuntimeService.transitionFailure(
+                    actionInstance,
+                    failedStep,
+                    result,
                     errorMessage,
-                    actionInstance.version(),
-                    actionInstance.createdAt(),
+                    ActionTransitionEvent.STEP_FAILED_RETRYABLE,
                     now
-            ));
+            );
+            ActionInstance retrying = retryTransition.transitionResult().actionInstance();
             dispatchRetry(retrying, now.plusMillis(resolvedBackoffMillis(stepDefinition, retryAction)));
             return;
         }
         // 走到这里说明当前策略已经放弃继续执行，action 进入 FAILED，等待人工治理或补偿链路接管。
-        actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                ActionStatus.FAILED,
-                currentStep.stepIndex(),
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                result.errorCode(),
+        ActionTransitionExecution terminalFailureTransition = actionExecutionRuntimeService.transitionFailure(
+                actionInstance,
+                failedStep,
+                result,
                 errorMessage,
-                actionInstance.version(),
-                actionInstance.createdAt(),
+                ActionTransitionEvent.STEP_FAILED_TERMINAL,
                 now
-        ));
-        actionObservabilityService.actionFailed(actionInstance, failedStep, result.errorCode());
+        );
+        actionObservabilityService.actionFailed(
+                terminalFailureTransition.transitionResult().actionInstance(),
+                failedStep,
+                result.errorCode()
+        );
         actionObservabilityService.retryExhausted(actionInstance, failedStep, result.errorCode(), errorMessage);
     }
 
@@ -261,6 +294,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         return result.errorMessage() == null || result.errorMessage().isBlank()
                 ? "step execution failed"
                 : result.errorMessage();
+    }
+
+    private String normalizedThrowableMessage(RuntimeException ex) {
+        return ex.getMessage() == null || ex.getMessage().isBlank()
+                ? ex.getClass().getSimpleName()
+                : ex.getMessage();
     }
 
     private void dispatchNextStep(ActionInstance actionInstance, Instant now) {

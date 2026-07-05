@@ -8,13 +8,23 @@ import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
+import io.github.actionguard.core.runtime.state.ActionTransitionContext;
+import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
+import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
+import io.github.actionguard.core.runtime.state.ActionTransitionMetadata;
+import io.github.actionguard.core.runtime.state.ActionTransitionService;
 import io.github.actionguard.ops.api.support.ActionCommandValidator;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class ActionCommandService {
@@ -27,6 +37,8 @@ public class ActionCommandService {
     private final Optional<ActionExecutionMessageProducer> producer;
     private final ActionCompensationExecutor actionCompensationExecutor;
     private final ActionObservabilityService actionObservabilityService;
+    private final ActionTransitionLogRepository actionTransitionLogRepository;
+    private final ActionTransitionService actionTransitionService;
 
     public ActionCommandService(
             ActionInstanceRepository actionInstanceRepository,
@@ -38,14 +50,44 @@ public class ActionCommandService {
             ActionCompensationExecutor actionCompensationExecutor,
             ActionObservabilityService actionObservabilityService
     ) {
-        this.actionInstanceRepository = actionInstanceRepository;
-        this.actionOutboxRepository = actionOutboxRepository;
-        this.actionStepInstanceRepository = actionStepInstanceRepository;
-        this.validator = validator;
-        this.auditService = auditService;
-        this.producer = producer;
-        this.actionCompensationExecutor = actionCompensationExecutor;
-        this.actionObservabilityService = actionObservabilityService;
+        this(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                validator,
+                auditService,
+                producer,
+                actionCompensationExecutor,
+                actionObservabilityService,
+                new io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository()
+        );
+    }
+
+    public ActionCommandService(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionOutboxRepository actionOutboxRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionCommandValidator validator,
+            ActionAuditService auditService,
+            Optional<ActionExecutionMessageProducer> producer,
+            ActionCompensationExecutor actionCompensationExecutor,
+            ActionObservabilityService actionObservabilityService,
+            ActionTransitionLogRepository actionTransitionLogRepository
+    ) {
+        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
+        this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
+        this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
+        this.validator = Objects.requireNonNull(validator, "validator must not be null");
+        this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
+        this.producer = Objects.requireNonNull(producer, "producer must not be null");
+        this.actionCompensationExecutor = Objects.requireNonNull(actionCompensationExecutor, "actionCompensationExecutor must not be null");
+        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+        this.actionTransitionLogRepository = Objects.requireNonNull(actionTransitionLogRepository, "actionTransitionLogRepository must not be null");
+        this.actionTransitionService = new ActionTransitionService(
+                this.actionInstanceRepository,
+                this.actionTransitionLogRepository,
+                this.actionObservabilityService
+        );
     }
 
     public ActionCommandService(
@@ -65,10 +107,12 @@ public class ActionCommandService {
                 auditService,
                 producer,
                 actionCompensationExecutor,
-                new ActionObservabilityService(Optional.empty(), Optional.empty(), java.time.Clock.systemUTC())
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), java.time.Clock.systemUTC()),
+                new io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository()
         );
     }
 
+    @Transactional
     public void retry(String actionInstanceId, String operator) {
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
@@ -83,7 +127,7 @@ public class ActionCommandService {
                 return;
             }
             validator.validateRetry(actionInstance.status());
-            producer.orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available")).publish(outbox);
+            publishOutboxAfterCommit(outbox);
             auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry dispatched");
             actionObservabilityService.governanceCommand("RETRY", "SUCCESS");
         } catch (RuntimeException ex) {
@@ -93,6 +137,7 @@ public class ActionCommandService {
         }
     }
 
+    @Transactional
     public void cancel(String actionInstanceId, String operator) {
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
@@ -103,21 +148,32 @@ public class ActionCommandService {
                 return;
             }
             validator.validateCancel(actionInstance.status());
-            actionInstanceRepository.save(new ActionInstance(
-                    actionInstance.id(),
-                    actionInstance.actionName(),
-                    actionInstance.bizKey(),
-                    ActionStatus.IGNORED,
-                    actionInstance.currentStepIndex(),
-                    actionInstance.totalStepCount(),
-                    actionInstance.attributes(),
-                    actionInstance.lastErrorCode(),
-                    actionInstance.lastErrorMessage(),
-                    actionInstance.version(),
-                    actionInstance.createdAt(),
-                    Instant.now()
-            ));
-            auditService.record(actionInstanceId, "CANCEL", operator, "{}", "SUCCESS", "action ignored");
+            ActionTransitionExecution transitionExecution = actionTransitionService.transition(
+                    actionInstance,
+                    ActionTransitionEvent.MANUAL_CANCEL_REQUESTED,
+                    ActionTransitionContext.of(
+                            actionInstance.currentStepIndex(),
+                            actionInstance.lastErrorCode(),
+                            actionInstance.lastErrorMessage(),
+                            Instant.now()
+                    ),
+                    ActionTransitionMetadata.of(
+                            actionInstance.currentStepIndex(),
+                            null,
+                            null,
+                            operator,
+                            null,
+                            null
+                    )
+            );
+            auditService.recordTransition(
+                    actionInstanceId,
+                    "CANCEL",
+                    operator,
+                    transitionExecution.transitionResult(),
+                    "SUCCESS",
+                    "action ignored"
+            );
             actionObservabilityService.governanceCommand("CANCEL", "SUCCESS");
         } catch (RuntimeException ex) {
             auditService.record(actionInstanceId, "CANCEL", operator, "{}", "FAILED", ex.getMessage());
@@ -126,6 +182,7 @@ public class ActionCommandService {
         }
     }
 
+    @Transactional
     public void skip(String actionInstanceId, String operator) {
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
@@ -153,22 +210,37 @@ public class ActionCommandService {
                     Instant.now()
             ));
             int nextStepIndex = currentStep.stepIndex() + 1;
-            ActionStatus nextStatus = nextStepIndex >= actionInstance.totalStepCount() ? ActionStatus.SUCCESS : ActionStatus.DISPATCHING;
-            actionInstanceRepository.save(new ActionInstance(
-                    actionInstance.id(),
-                    actionInstance.actionName(),
-                    actionInstance.bizKey(),
-                    nextStatus,
+            ActionTransitionContext transitionContext = ActionTransitionContext.of(
                     nextStepIndex,
-                    actionInstance.totalStepCount(),
-                    actionInstance.attributes(),
                     actionInstance.lastErrorCode(),
                     actionInstance.lastErrorMessage(),
-                    actionInstance.version(),
-                    actionInstance.createdAt(),
                     Instant.now()
-            ));
-            auditService.record(actionInstanceId, "SKIP", operator, "{}", "SUCCESS", "current step skipped");
+            );
+            ActionTransitionExecution transitionExecution = actionTransitionService.transition(
+                    actionInstance,
+                    ActionTransitionEvent.MANUAL_SKIP_REQUESTED,
+                    transitionContext,
+                    ActionTransitionMetadata.of(
+                            currentStep.stepIndex(),
+                            currentStep.stepName(),
+                            currentStep.stepType(),
+                            operator,
+                            null,
+                            null
+                    )
+            );
+            ActionStatus nextStatus = transitionExecution.transitionResult().actionInstance().status();
+            if (nextStatus == ActionStatus.DISPATCHING) {
+                scheduleNextStep(actionInstanceId);
+            }
+            auditService.recordTransition(
+                    actionInstanceId,
+                    "SKIP",
+                    operator,
+                    transitionExecution.transitionResult(),
+                    "SUCCESS",
+                    "current step skipped"
+            );
             actionObservabilityService.governanceCommand("SKIP", "SUCCESS");
         } catch (RuntimeException ex) {
             auditService.record(actionInstanceId, "SKIP", operator, "{}", "FAILED", ex.getMessage());
@@ -177,6 +249,7 @@ public class ActionCommandService {
         }
     }
 
+    @Transactional
     public void compensate(String actionInstanceId, String operator) {
         ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
                 .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
@@ -200,5 +273,38 @@ public class ActionCommandService {
             actionObservabilityService.governanceCommand("COMPENSATE", "FAILED");
             throw ex;
         }
+    }
+
+    private void scheduleNextStep(String actionInstanceId) {
+        ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
+                .orElseThrow(() -> new IllegalStateException("Outbox not found for action: " + actionInstanceId));
+        Instant now = Instant.now();
+        ActionOutbox scheduledOutbox = actionOutboxRepository.save(new ActionOutbox(
+                outbox.id(),
+                outbox.actionInstanceId(),
+                outbox.topic(),
+                io.github.actionguard.core.model.ActionOutboxStatus.NEW,
+                now,
+                outbox.attemptCount(),
+                outbox.version(),
+                outbox.createdAt(),
+                now
+        ));
+        publishOutboxAfterCommit(scheduledOutbox);
+    }
+
+    private void publishOutboxAfterCommit(ActionOutbox outbox) {
+        ActionExecutionMessageProducer requiredProducer = producer
+                .orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available"));
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            requiredProducer.publish(outbox);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                requiredProducer.publish(outbox);
+            }
+        });
     }
 }

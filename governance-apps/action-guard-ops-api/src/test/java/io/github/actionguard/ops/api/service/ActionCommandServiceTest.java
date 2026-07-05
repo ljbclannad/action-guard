@@ -30,6 +30,7 @@ import io.github.actionguard.api.runtime.StepExecutionResult;
 import io.github.actionguard.api.spi.ActionStepHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -165,6 +166,47 @@ class ActionCommandServiceTest {
     }
 
     @Test
+    void shouldPublishRetryAfterTransactionCommit() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingProducer producer = new CapturingProducer();
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.FAILED, 0, 1, Map.of(),
+                "DOWNSTREAM_ERROR", "sms provider failed", 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.NEW, Instant.parse("2026-06-26T12:00:00Z"),
+                0, 0, Instant.parse("2026-06-26T12:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.of(producer),
+                new NoOpCompensationService()
+        );
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.retry("act-1", "anonymous");
+
+            assertThat(producer.published()).isEmpty();
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+            assertThat(producer.published()).hasSize(1);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void shouldCancelDispatchingActionAndMoveToIgnored() {
         InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
         InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
@@ -223,6 +265,51 @@ class ActionCommandServiceTest {
         assertThat(actionStepInstanceRepository.findByActionInstanceId("act-1").get(0).status()).isEqualTo(ActionStepStatus.SUCCESS);
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).operationType()).isEqualTo("SKIP");
+    }
+
+    @Test
+    void shouldScheduleNextStepWhenSkipAdvancesMultiStepAction() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingProducer producer = new CapturingProducer();
+        Instant now = Instant.parse("2026-06-26T12:00:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.DISPATCHING, 0, 2, Map.of(),
+                null, null, 0, now, now
+        ));
+        actionStepInstanceRepository.saveAll(List.of(
+                new ActionStepInstance("step-1", "act-1", 0, "send-cancel-event", "MQ_MESSAGE", "order.cancel.exchange", ActionStepStatus.PENDING, 0, Map.of(), null, null, 0, now, now),
+                new ActionStepInstance("step-2", "act-1", 1, "send-user-sms", "SMS", "notify.user", ActionStepStatus.PENDING, 0, Map.of(), null, null, 0, now, now)
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", ActionOutboxStatus.DONE, now,
+                0, 0, now, now
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.of(producer),
+                new NoOpCompensationService()
+        );
+
+        service.skip("act-1", "anonymous");
+
+        ActionInstance updated = actionInstanceRepository.findById("act-1").orElseThrow();
+        ActionOutbox updatedOutbox = actionOutboxRepository.findByActionInstanceId("act-1").orElseThrow();
+        assertThat(updated.status()).isEqualTo(ActionStatus.DISPATCHING);
+        assertThat(updated.currentStepIndex()).isEqualTo(1);
+        assertThat(actionStepInstanceRepository.findByActionInstanceId("act-1").get(0).status()).isEqualTo(ActionStepStatus.SUCCESS);
+        assertThat(updatedOutbox.status()).isEqualTo(ActionOutboxStatus.NEW);
+        assertThat(producer.published()).hasSize(1);
+        assertThat(producer.published().get(0).id()).isEqualTo("outbox-1");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
     }
 
     @Test

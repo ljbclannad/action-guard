@@ -10,12 +10,22 @@ import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
+import io.github.actionguard.core.model.ActionTransitionLog;
 import io.github.actionguard.core.repository.ActionCompensationLogRepository;
 import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
+import io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
+import io.github.actionguard.core.runtime.state.ActionCommand;
+import io.github.actionguard.core.runtime.state.ActionStateMachine;
+import io.github.actionguard.core.runtime.state.ActionTransitionContext;
+import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
+import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
+import io.github.actionguard.core.runtime.state.ActionTransitionMetadata;
+import io.github.actionguard.core.runtime.state.ActionTransitionService;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -34,8 +44,10 @@ public class ActionCompensationService implements ActionCompensationExecutor {
     private final ActionDefinitionRegistry actionDefinitionRegistry;
     private final ActionGovernancePolicyRepository actionGovernancePolicyRepository;
     private final ActionCompensationLogRepository actionCompensationLogRepository;
+    private final ActionTransitionLogRepository actionTransitionLogRepository;
     private final ActionCompensatorRegistry actionCompensatorRegistry;
     private final ActionObservabilityService actionObservabilityService;
+    private final ActionTransitionService actionTransitionService;
     private final Clock clock;
 
     public ActionCompensationService(
@@ -48,14 +60,17 @@ public class ActionCompensationService implements ActionCompensationExecutor {
             ActionObservabilityService actionObservabilityService,
             Clock clock
     ) {
-        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
-        this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
-        this.actionDefinitionRegistry = Objects.requireNonNull(actionDefinitionRegistry, "actionDefinitionRegistry must not be null");
-        this.actionGovernancePolicyRepository = Objects.requireNonNull(actionGovernancePolicyRepository, "actionGovernancePolicyRepository must not be null");
-        this.actionCompensationLogRepository = Objects.requireNonNull(actionCompensationLogRepository, "actionCompensationLogRepository must not be null");
-        this.actionCompensatorRegistry = Objects.requireNonNull(actionCompensatorRegistry, "actionCompensatorRegistry must not be null");
-        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
-        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                actionDefinitionRegistry,
+                actionGovernancePolicyRepository,
+                actionCompensationLogRepository,
+                new InMemoryActionTransitionLogRepository(),
+                actionCompensatorRegistry,
+                actionObservabilityService,
+                clock
+        );
     }
 
     public ActionCompensationService(
@@ -73,6 +88,57 @@ public class ActionCompensationService implements ActionCompensationExecutor {
                 actionDefinitionRegistry,
                 actionGovernancePolicyRepository,
                 actionCompensationLogRepository,
+                new InMemoryActionTransitionLogRepository(),
+                actionCompensatorRegistry,
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), clock),
+                clock
+        );
+    }
+
+    public ActionCompensationService(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            ActionGovernancePolicyRepository actionGovernancePolicyRepository,
+            ActionCompensationLogRepository actionCompensationLogRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
+            ActionCompensatorRegistry actionCompensatorRegistry,
+            ActionObservabilityService actionObservabilityService,
+            Clock clock
+    ) {
+        this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
+        this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
+        this.actionDefinitionRegistry = Objects.requireNonNull(actionDefinitionRegistry, "actionDefinitionRegistry must not be null");
+        this.actionGovernancePolicyRepository = Objects.requireNonNull(actionGovernancePolicyRepository, "actionGovernancePolicyRepository must not be null");
+        this.actionCompensationLogRepository = Objects.requireNonNull(actionCompensationLogRepository, "actionCompensationLogRepository must not be null");
+        this.actionTransitionLogRepository = Objects.requireNonNull(actionTransitionLogRepository, "actionTransitionLogRepository must not be null");
+        this.actionCompensatorRegistry = Objects.requireNonNull(actionCompensatorRegistry, "actionCompensatorRegistry must not be null");
+        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+        this.actionTransitionService = new ActionTransitionService(
+                this.actionInstanceRepository,
+                this.actionTransitionLogRepository,
+                this.actionObservabilityService
+        );
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
+    public ActionCompensationService(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            ActionGovernancePolicyRepository actionGovernancePolicyRepository,
+            ActionCompensationLogRepository actionCompensationLogRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
+            ActionCompensatorRegistry actionCompensatorRegistry,
+            Clock clock
+    ) {
+        this(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                actionDefinitionRegistry,
+                actionGovernancePolicyRepository,
+                actionCompensationLogRepository,
+                actionTransitionLogRepository,
                 actionCompensatorRegistry,
                 new ActionObservabilityService(Optional.empty(), Optional.empty(), clock),
                 clock
@@ -85,9 +151,7 @@ public class ActionCompensationService implements ActionCompensationExecutor {
         if (actionInstance.status() == ActionStatus.COMPENSATED || actionInstance.status() == ActionStatus.COMPENSATING) {
             return;
         }
-        if (actionInstance.status() != ActionStatus.FAILED && actionInstance.status() != ActionStatus.DEAD) {
-            throw new IllegalStateException("Compensation is not allowed for status: " + actionInstance.status());
-        }
+        ActionStateMachine.assertCommandAllowed(actionInstance.status(), ActionCommand.COMPENSATE);
         if (!effectiveCompensationEnabled(actionInstance.actionName())) {
             throw new IllegalStateException("compensation is disabled for action: " + actionInstance.actionName());
         }
@@ -121,20 +185,12 @@ public class ActionCompensationService implements ActionCompensationExecutor {
 
     private ActionInstance claimCompensating(ActionInstance actionInstance) {
         Instant now = clock.instant();
-        return actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                ActionStatus.COMPENSATING,
-                actionInstance.currentStepIndex(),
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                null,
-                null,
-                actionInstance.version(),
-                actionInstance.createdAt(),
-                now
-        ));
+        return actionTransitionService.transition(
+                actionInstance,
+                ActionTransitionEvent.COMPENSATION_STARTED,
+                ActionTransitionContext.atCurrentStep(actionInstance.currentStepIndex(), now),
+                ActionTransitionMetadata.of(actionInstance.currentStepIndex(), null, null, null, null, null)
+        ).transitionResult().actionInstance();
     }
 
     private void executeCompensation(ActionInstance actionInstance, boolean recoveryMode) {
@@ -165,39 +221,35 @@ public class ActionCompensationService implements ActionCompensationExecutor {
                 // 一旦某个补偿步骤失败，当前动作回到 DEAD，等待人工介入，而不是继续补偿剩余步骤。
                 writeCompensationLog(compensationBatchId, step, "FAILED", compensator.getClass().getName(), result.message());
                 actionObservabilityService.compensationFailed(actionInstance, step, result.message());
-                actionInstanceRepository.save(new ActionInstance(
-                        actionInstance.id(),
-                        actionInstance.actionName(),
-                        actionInstance.bizKey(),
-                        ActionStatus.DEAD,
-                        actionInstance.currentStepIndex(),
-                        actionInstance.totalStepCount(),
-                        actionInstance.attributes(),
-                        "COMPENSATION_FAILED",
-                        result.message(),
-                        actionInstance.version(),
-                        actionInstance.createdAt(),
-                        clock.instant()
-                ));
+                actionTransitionService.transition(
+                        actionInstance,
+                        ActionTransitionEvent.COMPENSATION_FAILED,
+                        ActionTransitionContext.failure(
+                                actionInstance.currentStepIndex(),
+                                "COMPENSATION_FAILED",
+                                result.message(),
+                                clock.instant()
+                        ),
+                        ActionTransitionMetadata.of(
+                                step.stepIndex(),
+                                step.stepName(),
+                                step.stepType(),
+                                null,
+                                "COMPENSATION_FAILED",
+                                result.message()
+                        )
+                );
                 return;
             }
             writeCompensationLog(compensationBatchId, step, "SUCCESS", compensator.getClass().getName(), result.message());
         }
 
-        actionInstanceRepository.save(new ActionInstance(
-                actionInstance.id(),
-                actionInstance.actionName(),
-                actionInstance.bizKey(),
-                ActionStatus.COMPENSATED,
-                actionInstance.currentStepIndex(),
-                actionInstance.totalStepCount(),
-                actionInstance.attributes(),
-                null,
-                null,
-                actionInstance.version(),
-                actionInstance.createdAt(),
-                clock.instant()
-        ));
+        ActionTransitionExecution transitionExecution = actionTransitionService.transition(
+                actionInstance,
+                ActionTransitionEvent.COMPENSATION_SUCCEEDED,
+                ActionTransitionContext.atCurrentStep(actionInstance.currentStepIndex(), clock.instant()),
+                ActionTransitionMetadata.of(actionInstance.currentStepIndex(), null, null, null, null, null)
+        );
         actionObservabilityService.actionCompensated(actionInstance);
     }
 

@@ -1,5 +1,6 @@
 package io.github.actionguard.ops.api.service;
 
+import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 import io.github.actionguard.ops.api.model.ActionOpsAuditLog;
 import io.github.actionguard.ops.api.model.AuditLogQueryFilter;
 import io.github.actionguard.ops.api.model.AuditLogView;
@@ -35,6 +36,26 @@ public class ActionAuditService {
                 resultMessage,
                 Instant.now()
         ));
+    }
+
+    public void recordTransition(
+            String actionInstanceId,
+            String operationType,
+            String operator,
+            ActionTransitionResult transitionResult,
+            String resultStatus,
+            String resultMessage
+    ) {
+        record(
+                actionInstanceId,
+                operationType,
+                operator,
+                "{\"event\":\"" + transitionResult.event().name()
+                        + "\",\"fromStatus\":\"" + transitionResult.fromStatus().name()
+                        + "\",\"toStatus\":\"" + transitionResult.toStatus().name() + "\"}",
+                resultStatus,
+                resultMessage
+        );
     }
 
     public PageResult<AuditLogView> query(AuditLogQueryFilter filter) {

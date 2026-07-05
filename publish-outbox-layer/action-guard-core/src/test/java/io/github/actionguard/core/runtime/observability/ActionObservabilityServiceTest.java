@@ -7,6 +7,9 @@ import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
+import io.github.actionguard.core.runtime.state.ActionTransitionContext;
+import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
+import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -116,6 +119,30 @@ class ActionObservabilityServiceTest {
         assertThat(metricsRecorder.counters)
                 .containsEntry("action.guard.action.compensated|{actionName=order-cancel-flow, result=compensated, stepType=unknown}", 1L)
                 .containsEntry("action.guard.governance.command|{actionName=unknown, command=RETRY, result=SUCCESS, stepType=unknown}", 1L);
+    }
+
+    @Test
+    void shouldRecordActionTransitionMetric() {
+        CapturingActionMetricsRecorder metricsRecorder = new CapturingActionMetricsRecorder();
+        ActionObservabilityService service = new ActionObservabilityService(
+                Optional.empty(),
+                Optional.of(metricsRecorder),
+                Clock.fixed(Instant.parse("2026-06-27T08:00:00Z"), ZoneOffset.UTC)
+        );
+        ActionInstance transitioned = new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.RETRYING, 0, 1, Map.of(),
+                "STEP_TIMEOUT", "timed out", 0, Instant.now(), Instant.now()
+        );
+
+        service.actionTransition(new ActionTransitionResult(
+                ActionStatus.DISPATCHING,
+                ActionStatus.RETRYING,
+                ActionTransitionEvent.STEP_FAILED_RETRYABLE,
+                transitioned
+        ));
+
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.action.transition|{actionName=order-cancel-flow, event=STEP_FAILED_RETRYABLE, fromStatus=DISPATCHING, stepType=unknown, toStatus=RETRYING}", 1L);
     }
 
     private static final class CapturingActionAlertPublisher implements ActionAlertPublisher {

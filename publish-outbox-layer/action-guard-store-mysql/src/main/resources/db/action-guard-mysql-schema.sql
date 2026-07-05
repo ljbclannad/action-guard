@@ -108,3 +108,20 @@ create table if not exists action_compensation_log (
 
 create index idx_action_compensation_log_action on action_compensation_log (action_instance_id, created_at);
 create index idx_action_compensation_log_batch on action_compensation_log (compensation_batch_id, step_index);
+
+create table if not exists action_transition_log (
+    id varchar(64) primary key,
+    action_instance_id varchar(64) not null,
+    transition_event varchar(64) not null,
+    from_status varchar(32) not null,
+    to_status varchar(32) not null,
+    step_index int,
+    step_name varchar(128),
+    step_type varchar(128),
+    operator varchar(128),
+    error_code varchar(128),
+    error_message text,
+    created_at timestamp not null
+);
+
+create index idx_action_transition_log_action on action_transition_log (action_instance_id, created_at);
