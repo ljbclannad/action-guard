@@ -15,6 +15,7 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
 
     private final Map<String, ActionInstance> storageByBusinessKey = new ConcurrentHashMap<>();
     private final Map<String, ActionInstance> storageById = new ConcurrentHashMap<>();
+    private final Map<String, String> instanceIdByIdempotencyKey = new ConcurrentHashMap<>();
 
     @Override
     public Optional<ActionInstance> findById(String id) {
@@ -28,7 +29,7 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
 
     @Override
     public Optional<ActionInstance> findByIdempotencyKey(String idempotencyKey) {
-        return storageById.values().stream().filter(instance -> instance.idempotencyKey().equals(idempotencyKey)).findFirst();
+        return Optional.ofNullable(instanceIdByIdempotencyKey.get(idempotencyKey)).flatMap(this::findById);
     }
 
     @Override
@@ -45,6 +46,10 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
 
     @Override
     public ActionInstance save(ActionInstance instance) {
+        String existingId = instanceIdByIdempotencyKey.putIfAbsent(instance.idempotencyKey(), instance.id());
+        if (existingId != null && !existingId.equals(instance.id())) {
+            throw new org.springframework.dao.DuplicateKeyException("Action idempotency key already exists: " + instance.idempotencyKey());
+        }
         ActionInstance persisted = storageById.compute(instance.id(), (id, existing) -> {
             if (existing == null) {
                 return instance;

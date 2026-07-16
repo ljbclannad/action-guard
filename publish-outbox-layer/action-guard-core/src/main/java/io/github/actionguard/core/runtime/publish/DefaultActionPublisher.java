@@ -15,6 +15,7 @@ import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -104,9 +105,15 @@ public class DefaultActionPublisher implements ActionPublisher {
         );
 
         // 保持固定写入顺序，便于后续排查主链路问题时从 action -> step -> outbox 顺着追踪。
-        actionInstanceRepository.save(actionInstance);
-        actionStepInstanceRepository.saveAll(stepInstances);
-        actionOutboxRepository.save(outbox);
+        try {
+            actionInstanceRepository.save(actionInstance);
+            actionStepInstanceRepository.saveAll(stepInstances);
+            actionOutboxRepository.save(outbox);
+        } catch (DuplicateKeyException ex) {
+            return actionInstanceRepository.findByIdempotencyKey(idempotencyKey)
+                    .map(instance -> new ActionPublication(instance.id(), true))
+                    .orElseThrow(() -> ex);
+        }
         return new ActionPublication(actionInstanceId, false);
     }
 

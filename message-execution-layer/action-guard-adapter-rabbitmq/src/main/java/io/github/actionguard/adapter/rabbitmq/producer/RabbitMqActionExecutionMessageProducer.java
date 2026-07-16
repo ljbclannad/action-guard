@@ -12,8 +12,11 @@ import org.springframework.amqp.core.MessageBuilder;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.core.ReturnedMessage;
 
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.Objects;
 
 /**
@@ -36,6 +39,7 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
     private final ObjectMapper objectMapper;
     private final ActionExecutionMessageFactory messageFactory;
     private final ActionGuardRabbitMqProperties properties;
+    private final ConcurrentMap<String, ReturnedMessage> returnedMessages = new ConcurrentHashMap<>();
 
     public RabbitMqActionExecutionMessageProducer(
             RabbitTemplate rabbitTemplate,
@@ -47,11 +51,16 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.messageFactory = Objects.requireNonNull(messageFactory, "messageFactory must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.rabbitTemplate.setMandatory(true);
+        this.rabbitTemplate.setReturnsCallback(returned -> returnedMessages.put(
+                returned.getMessage().getMessageProperties().getMessageId(), returned
+        ));
     }
 
     @Override
     public void publish(ActionOutbox outbox) {
         ActionExecutionMessage executionMessage = messageFactory.create(outbox);
+        returnedMessages.remove(executionMessage.messageId());
         rabbitTemplate.invoke(operations -> {
             operations.send(properties.getExchange(), routingKey(executionMessage), toAmqpMessage(executionMessage));
             if (!operations.waitForConfirms(properties.getConfirmTimeout().toMillis())) {
@@ -59,6 +68,10 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
             }
             return null;
         });
+        ReturnedMessage returned = returnedMessages.remove(executionMessage.messageId());
+        if (returned != null) {
+            throw new IllegalStateException("RabbitMQ returned unroutable action execution message: " + returned.getReplyText());
+        }
     }
 
     private String routingKey(ActionExecutionMessage message) {
