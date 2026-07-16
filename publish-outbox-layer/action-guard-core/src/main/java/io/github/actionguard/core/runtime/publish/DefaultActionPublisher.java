@@ -1,6 +1,7 @@
 package io.github.actionguard.core.runtime.publish;
 
 import io.github.actionguard.api.ActionPublisher;
+import io.github.actionguard.api.ActionPublication;
 import io.github.actionguard.api.ActionRequest;
 import io.github.actionguard.api.definition.ActionDefinition;
 import io.github.actionguard.api.definition.ActionStepDefinition;
@@ -58,10 +59,15 @@ public class DefaultActionPublisher implements ActionPublisher {
     }
 
     @Override
-    public void publish(ActionRequest request) {
+    public ActionPublication publish(ActionRequest request) {
         validateRequest(request);
 
         ActionDefinition definition = definitionRegistry.getRequired(request.actionName());
+        String idempotencyKey = resolvedIdempotencyKey(request);
+        var existing = actionInstanceRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            return new ActionPublication(existing.orElseThrow().id(), true);
+        }
         Instant now = clock.instant();
         String actionInstanceId = UUID.randomUUID().toString();
 
@@ -70,7 +76,9 @@ public class DefaultActionPublisher implements ActionPublisher {
         ActionInstance actionInstance = new ActionInstance(
                 actionInstanceId,
                 definition.name(),
+                definition.version(),
                 request.bizKey(),
+                idempotencyKey,
                 ActionStatus.NEW,
                 0,
                 definition.steps().size(),
@@ -86,6 +94,7 @@ public class DefaultActionPublisher implements ActionPublisher {
                 UUID.randomUUID().toString(),
                 actionInstanceId,
                 ACTION_EXECUTE_TOPIC,
+                UUID.randomUUID().toString(),
                 ActionOutboxStatus.NEW,
                 now,
                 0,
@@ -98,6 +107,7 @@ public class DefaultActionPublisher implements ActionPublisher {
         actionInstanceRepository.save(actionInstance);
         actionStepInstanceRepository.saveAll(stepInstances);
         actionOutboxRepository.save(outbox);
+        return new ActionPublication(actionInstanceId, false);
     }
 
     private void validateRequest(ActionRequest request) {
@@ -114,6 +124,12 @@ public class DefaultActionPublisher implements ActionPublisher {
 
     private Map<String, Object> safeAttributes(Map<String, Object> attributes) {
         return attributes == null ? Map.of() : Map.copyOf(attributes);
+    }
+
+    private String resolvedIdempotencyKey(ActionRequest request) {
+        return request.idempotencyKey() == null || request.idempotencyKey().isBlank()
+                ? request.actionName() + ":" + request.bizKey()
+                : request.idempotencyKey();
     }
 
     private List<Map<String, Object>> safeStepPayloads(ActionRequest request) {

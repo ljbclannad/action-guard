@@ -8,6 +8,7 @@ import io.github.actionguard.core.runtime.execution.ActionExecutionMessageFactor
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback;
 
 import java.time.Instant;
 
@@ -61,6 +62,16 @@ class RabbitMqActionExecutionMessageProducerTest {
             this.exchange = exchange;
             this.routingKey = routingKey;
             this.message = message;
+        }
+
+        @Override
+        public <T> T invoke(OperationsCallback<T> action) {
+            return action.doInRabbit(this);
+        }
+
+        @Override
+        public boolean waitForConfirms(long timeout) {
+            return true;
         }
     }
 }

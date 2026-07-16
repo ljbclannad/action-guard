@@ -14,8 +14,6 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -53,9 +51,14 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
 
     @Override
     public void publish(ActionOutbox outbox) {
-        waitUntilAvailable(outbox);
         ActionExecutionMessage executionMessage = messageFactory.create(outbox);
-        rabbitTemplate.send(properties.getExchange(), routingKey(executionMessage), toAmqpMessage(executionMessage));
+        rabbitTemplate.invoke(operations -> {
+            operations.send(properties.getExchange(), routingKey(executionMessage), toAmqpMessage(executionMessage));
+            if (!operations.waitForConfirms(properties.getConfirmTimeout().toMillis())) {
+                throw new IllegalStateException("RabbitMQ did not confirm action execution message");
+            }
+            return null;
+        });
     }
 
     private String routingKey(ActionExecutionMessage message) {
@@ -83,16 +86,4 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
         }
     }
 
-    private void waitUntilAvailable(ActionOutbox outbox) {
-        long delayMillis = Duration.between(Instant.now(), outbox.availableAt()).toMillis();
-        if (delayMillis <= 0) {
-            return;
-        }
-        try {
-            Thread.sleep(delayMillis);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting to publish delayed action execution message", ex);
-        }
-    }
 }

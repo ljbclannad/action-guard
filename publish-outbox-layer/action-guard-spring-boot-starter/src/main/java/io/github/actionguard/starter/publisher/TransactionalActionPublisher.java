@@ -1,8 +1,8 @@
 package io.github.actionguard.starter.publisher;
 
 import io.github.actionguard.api.ActionPublisher;
+import io.github.actionguard.api.ActionPublication;
 import io.github.actionguard.api.ActionRequest;
-import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
 import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
@@ -72,12 +72,16 @@ public class TransactionalActionPublisher implements ActionPublisher {
 
     @Override
     @Transactional
-    public void publish(ActionRequest request) {
-        delegate.publish(request);
-        if (actionExecutionMessageProducer.isEmpty()) {
-            return;
+    public ActionPublication publish(ActionRequest request) {
+        ActionPublication publication = delegate.publish(request);
+        if (publication.duplicate()) {
+            return publication;
         }
-        ActionOutbox outbox = resolveOutbox(request);
+        if (actionExecutionMessageProducer.isEmpty()) {
+            return publication;
+        }
+        ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(publication.actionInstanceId())
+                .orElseThrow(() -> new IllegalStateException("Outbox not found for action instance"));
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             // 事务存在时一定要等提交成功后再真正投递 MQ。
             // 否则会出现“消息已经发出，但主事务回滚”的经典脏消息问题。
@@ -87,22 +91,14 @@ public class TransactionalActionPublisher implements ActionPublisher {
                     publishAfterCommit(outbox);
                 }
             });
-            return;
+            return publication;
         }
         publishAfterCommit(outbox);
-    }
-
-    private ActionOutbox resolveOutbox(ActionRequest request) {
-        ActionInstance actionInstance = actionInstanceRepository
-                .findByActionNameAndBizKey(request.actionName(), request.bizKey())
-                .orElseThrow(() -> new IllegalStateException("Published action instance not found"));
-        return actionOutboxRepository.findByActionInstanceId(actionInstance.id())
-                .orElseThrow(() -> new IllegalStateException("Outbox not found for action instance"));
+        return publication;
     }
 
     private void publishAfterCommit(ActionOutbox outbox) {
         ActionOutbox currentOutbox = outbox;
-        RuntimeException lastFailure = null;
         for (int attempt = 1; attempt <= publishRetryMaxAttempts; attempt++) {
             try {
                 actionExecutionMessageProducer.orElseThrow().publish(currentOutbox);
@@ -110,16 +106,13 @@ public class TransactionalActionPublisher implements ActionPublisher {
                 return;
             } catch (RuntimeException ex) {
                 // 这里的 retry 只覆盖“事务已提交后的 MQ 投递失败”窗口，用于缩短消息滞留在 outbox 的时间。
-                lastFailure = ex;
                 int nextAttemptCount = attempt;
-                ActionOutboxStatus nextStatus = attempt >= publishRetryMaxAttempts ? ActionOutboxStatus.DEAD : ActionOutboxStatus.NEW;
-                currentOutbox = markOutbox(currentOutbox, nextStatus, nextAttemptCount);
-                if (nextStatus == ActionOutboxStatus.DEAD) {
+                currentOutbox = markOutbox(currentOutbox, ActionOutboxStatus.NEW, nextAttemptCount);
+                if (attempt >= publishRetryMaxAttempts) {
                     actionObservabilityService.outboxPublishFailed(currentOutbox, nextAttemptCount, ex.getMessage());
                 }
             }
         }
-        throw Objects.requireNonNull(lastFailure, "lastFailure must not be null");
     }
 
     private ActionOutbox markOutbox(ActionOutbox outbox, ActionOutboxStatus status, int attemptCount) {
@@ -129,6 +122,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
+                outbox.dispatchId(),
                 status,
                 outbox.availableAt(),
                 attemptCount,

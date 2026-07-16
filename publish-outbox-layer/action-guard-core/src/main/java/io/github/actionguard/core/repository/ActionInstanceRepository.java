@@ -13,6 +13,10 @@ public interface ActionInstanceRepository {
 
     Optional<ActionInstance> findByActionNameAndBizKey(String actionName, String bizKey);
 
+    default Optional<ActionInstance> findByIdempotencyKey(String idempotencyKey) {
+        return Optional.empty();
+    }
+
     default List<ActionInstance> findByStatusesAndUpdatedBefore(List<ActionStatus> statuses, Instant updatedBeforeOrAt, int limit) {
         return List.of();
     }

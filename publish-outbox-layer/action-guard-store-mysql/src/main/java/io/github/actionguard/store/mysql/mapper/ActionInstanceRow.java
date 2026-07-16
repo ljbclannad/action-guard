@@ -6,7 +6,9 @@ public class ActionInstanceRow {
 
     private String id;
     private String actionName;
+    private int definitionVersion;
     private String bizKey;
+    private String idempotencyKey;
     private String status;
     private int currentStepIndex;
     private int totalStepCount;
@@ -21,8 +23,12 @@ public class ActionInstanceRow {
     public void setId(String id) { this.id = id; }
     public String getActionName() { return actionName; }
     public void setActionName(String actionName) { this.actionName = actionName; }
+    public int getDefinitionVersion() { return definitionVersion; }
+    public void setDefinitionVersion(int definitionVersion) { this.definitionVersion = definitionVersion; }
     public String getBizKey() { return bizKey; }
     public void setBizKey(String bizKey) { this.bizKey = bizKey; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public int getCurrentStepIndex() { return currentStepIndex; }

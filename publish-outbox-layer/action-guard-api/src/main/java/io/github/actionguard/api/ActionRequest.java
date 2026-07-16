@@ -7,6 +7,11 @@ public record ActionRequest(
         String actionName,
         String bizKey,
         Map<String, Object> attributes,
-        List<ActionStepRequest> steps
+        List<ActionStepRequest> steps,
+        String idempotencyKey
 ) {
+
+    public ActionRequest(String actionName, String bizKey, Map<String, Object> attributes, List<ActionStepRequest> steps) {
+        this(actionName, bizKey, attributes, steps, null);
+    }
 }

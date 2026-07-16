@@ -11,6 +11,7 @@ import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProduc
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -53,6 +54,11 @@ public class RabbitMqActionExecutionAutoConfiguration {
             ActionExecutionMessageFactory actionExecutionMessageFactory,
             ActionGuardRabbitMqProperties properties
     ) {
+        if (rabbitTemplate.getConnectionFactory() instanceof CachingConnectionFactory factory) {
+            factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.SIMPLE);
+        } else {
+            throw new IllegalStateException("Action Guard RabbitMQ producer requires a CachingConnectionFactory for publisher confirms");
+        }
         return new RabbitMqActionExecutionMessageProducer(
                 rabbitTemplate,
                 actionGuardRabbitMqObjectMapper,

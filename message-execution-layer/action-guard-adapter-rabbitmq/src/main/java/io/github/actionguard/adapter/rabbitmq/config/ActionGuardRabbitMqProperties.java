@@ -2,6 +2,8 @@ package io.github.actionguard.adapter.rabbitmq.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 @ConfigurationProperties(prefix = "action.guard.rabbitmq")
 public class ActionGuardRabbitMqProperties {
 
@@ -10,6 +12,7 @@ public class ActionGuardRabbitMqProperties {
     private String queue = "action.guard.execute.queue";
     private String consumerGroup = "action-guard-rabbitmq";
     private int maxRedeliveries = 1;
+    private Duration confirmTimeout = Duration.ofSeconds(5);
 
     public String getExchange() {
         return exchange;
@@ -50,4 +53,8 @@ public class ActionGuardRabbitMqProperties {
     public void setMaxRedeliveries(int maxRedeliveries) {
         this.maxRedeliveries = maxRedeliveries;
     }
+
+    public Duration getConfirmTimeout() { return confirmTimeout; }
+
+    public void setConfirmTimeout(Duration confirmTimeout) { this.confirmTimeout = confirmTimeout; }
 }

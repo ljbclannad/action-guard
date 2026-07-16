@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Action 执行回调的核心协调实现。
@@ -313,11 +314,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private void dispatchOutbox(String actionInstanceId, Instant availableAt, boolean incrementAttemptCount) {
         ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
                 .orElseThrow(() -> new IllegalStateException("Outbox not found for actionInstanceId: " + actionInstanceId));
-        // 下一步执行和重试都复用同一条 outbox，只更新可执行时间和尝试次数，避免额外制造重复消息。
+        // New logical work (next step or business retry) must not share the consumed message id.
         ActionOutbox scheduledOutbox = actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
+                UUID.randomUUID().toString(),
                 ActionOutboxStatus.NEW,
                 availableAt,
                 incrementAttemptCount ? outbox.attemptCount() + 1 : outbox.attemptCount(),
@@ -338,6 +340,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
+                outbox.dispatchId(),
                 ActionOutboxStatus.CLAIMED,
                 outbox.availableAt(),
                 outbox.attemptCount(),
@@ -351,6 +354,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                     claimedOutbox.id(),
                     claimedOutbox.actionInstanceId(),
                     claimedOutbox.topic(),
+                    claimedOutbox.dispatchId(),
                     ActionOutboxStatus.DONE,
                     claimedOutbox.availableAt(),
                     claimedOutbox.attemptCount(),
@@ -364,6 +368,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                     claimedOutbox.id(),
                     claimedOutbox.actionInstanceId(),
                     claimedOutbox.topic(),
+                    claimedOutbox.dispatchId(),
                     ActionOutboxStatus.NEW,
                     claimedOutbox.availableAt(),
                     claimedOutbox.attemptCount(),

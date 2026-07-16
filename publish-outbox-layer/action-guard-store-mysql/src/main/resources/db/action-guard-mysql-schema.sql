@@ -1,7 +1,9 @@
 create table if not exists action_instance (
     id varchar(64) primary key,
     action_name varchar(128) not null,
+    definition_version int not null,
     biz_key varchar(256) not null,
+    idempotency_key varchar(256) not null,
     status varchar(32) not null,
     current_step_index int not null,
     total_step_count int not null,
@@ -14,6 +16,7 @@ create table if not exists action_instance (
 );
 
 create index idx_action_instance_name_biz on action_instance (action_name, biz_key);
+create unique index uk_action_instance_idempotency on action_instance (idempotency_key);
 
 create table if not exists action_step_instance (
     id varchar(64) primary key,
@@ -38,6 +41,7 @@ create table if not exists action_outbox (
     id varchar(64) primary key,
     action_instance_id varchar(64) not null,
     topic varchar(64) not null,
+    dispatch_id varchar(64) not null,
     status varchar(32) not null,
     available_at timestamp not null,
     attempt_count int not null,
@@ -47,6 +51,7 @@ create table if not exists action_outbox (
 );
 
 create index idx_action_outbox_action on action_outbox (action_instance_id);
+create index idx_action_outbox_recoverable on action_outbox (status, available_at, created_at);
 
 create table if not exists action_consume_log (
     id varchar(64) primary key,

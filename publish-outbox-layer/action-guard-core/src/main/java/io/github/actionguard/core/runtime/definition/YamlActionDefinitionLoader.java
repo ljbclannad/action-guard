@@ -46,6 +46,7 @@ public class YamlActionDefinitionLoader implements ActionDefinitionLoader {
                     .toList();
             return new ActionDefinition(
                     String.valueOf(raw.get("name")),
+                    integerValue(raw.get("version")) == null ? 1 : integerValue(raw.get("version")),
                     String.valueOf(raw.get("description")),
                     raw.get("compensationEnabled") instanceof Boolean enabled ? enabled : false,
                     definitions

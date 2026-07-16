@@ -7,7 +7,9 @@
     <select id="selectById" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
         select id,
                action_name as actionName,
+               definition_version as definitionVersion,
                biz_key as bizKey,
+               idempotency_key as idempotencyKey,
                status,
                current_step_index as currentStepIndex,
                total_step_count as totalStepCount,
@@ -21,10 +23,21 @@
         where id = #{id}
     </select>
 
+    <select id="selectByIdempotencyKey" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
+        select id, action_name as actionName, definition_version as definitionVersion, biz_key as bizKey,
+               idempotency_key as idempotencyKey, status, current_step_index as currentStepIndex,
+               total_step_count as totalStepCount, attributes_json as attributesJson,
+               last_error_code as lastErrorCode, last_error_message as lastErrorMessage, version,
+               created_at as createdAt, updated_at as updatedAt
+        from action_instance where idempotency_key = #{idempotencyKey}
+    </select>
+
     <select id="selectByActionNameAndBizKey" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
         select id,
                action_name as actionName,
+               definition_version as definitionVersion,
                biz_key as bizKey,
+               idempotency_key as idempotencyKey,
                status,
                current_step_index as currentStepIndex,
                total_step_count as totalStepCount,
@@ -44,7 +57,9 @@
     <select id="selectByStatusesUpdatedBefore" resultType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
         select id,
                action_name as actionName,
+               definition_version as definitionVersion,
                biz_key as bizKey,
+               idempotency_key as idempotencyKey,
                status,
                current_step_index as currentStepIndex,
                total_step_count as totalStepCount,
@@ -66,10 +81,10 @@
 
     <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionInstanceRow">
         insert into action_instance (
-            id, action_name, biz_key, status, current_step_index, total_step_count, attributes_json,
+            id, action_name, definition_version, biz_key, idempotency_key, status, current_step_index, total_step_count, attributes_json,
             last_error_code, last_error_message, version, created_at, updated_at
         ) values (
-            #{id}, #{actionName}, #{bizKey}, #{status}, #{currentStepIndex}, #{totalStepCount}, #{attributesJson},
+            #{id}, #{actionName}, #{definitionVersion}, #{bizKey}, #{idempotencyKey}, #{status}, #{currentStepIndex}, #{totalStepCount}, #{attributesJson},
             #{lastErrorCode}, #{lastErrorMessage}, #{version}, #{createdAt}, #{updatedAt}
         )
     </insert>

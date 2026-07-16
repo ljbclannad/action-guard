@@ -17,7 +17,9 @@ public class ActionExecutionMessageFactory {
     }
 
     public String messageId(ActionOutbox outbox) {
-        return outbox.topic() + ":" + outbox.id();
+        // A dispatch is immutable from the consumer's point of view. MQ retries keep this id,
+        // while a next step or a business retry receives a new dispatch id.
+        return outbox.topic() + ":" + outbox.dispatchId();
     }
 
     public String messageKey(ActionOutbox outbox) {

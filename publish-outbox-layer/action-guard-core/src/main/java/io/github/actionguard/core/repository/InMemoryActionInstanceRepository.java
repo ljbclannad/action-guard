@@ -27,6 +27,11 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
     }
 
     @Override
+    public Optional<ActionInstance> findByIdempotencyKey(String idempotencyKey) {
+        return storageById.values().stream().filter(instance -> instance.idempotencyKey().equals(idempotencyKey)).findFirst();
+    }
+
+    @Override
     public List<ActionInstance> findByStatusesAndUpdatedBefore(List<ActionStatus> statuses, Instant updatedBeforeOrAt, int limit) {
         if (statuses == null || statuses.isEmpty() || limit <= 0) {
             return List.of();
@@ -57,7 +62,9 @@ public class InMemoryActionInstanceRepository implements ActionInstanceRepositor
         return new ActionInstance(
                 instance.id(),
                 instance.actionName(),
+                instance.definitionVersion(),
                 instance.bizKey(),
+                instance.idempotencyKey(),
                 instance.status(),
                 instance.currentStepIndex(),
                 instance.totalStepCount(),

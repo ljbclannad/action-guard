@@ -39,6 +39,11 @@ public class MysqlActionInstanceRepository implements ActionInstanceRepository {
     }
 
     @Override
+    public Optional<ActionInstance> findByIdempotencyKey(String idempotencyKey) {
+        return Optional.ofNullable(mapper.selectByIdempotencyKey(idempotencyKey)).map(this::toModel);
+    }
+
+    @Override
     public List<ActionInstance> findByStatusesAndUpdatedBefore(List<ActionStatus> statuses, Instant updatedBeforeOrAt, int limit) {
         if (statuses == null || statuses.isEmpty() || limit <= 0) {
             return List.of();
@@ -66,7 +71,9 @@ public class MysqlActionInstanceRepository implements ActionInstanceRepository {
         return new ActionInstance(
                 instance.id(),
                 instance.actionName(),
+                instance.definitionVersion(),
                 instance.bizKey(),
+                instance.idempotencyKey(),
                 instance.status(),
                 instance.currentStepIndex(),
                 instance.totalStepCount(),
@@ -83,7 +90,9 @@ public class MysqlActionInstanceRepository implements ActionInstanceRepository {
         ActionInstanceRow row = new ActionInstanceRow();
         row.setId(instance.id());
         row.setActionName(instance.actionName());
+        row.setDefinitionVersion(instance.definitionVersion());
         row.setBizKey(instance.bizKey());
+        row.setIdempotencyKey(instance.idempotencyKey());
         row.setStatus(instance.status().name());
         row.setCurrentStepIndex(instance.currentStepIndex());
         row.setTotalStepCount(instance.totalStepCount());
@@ -100,7 +109,9 @@ public class MysqlActionInstanceRepository implements ActionInstanceRepository {
         return new ActionInstance(
                 row.getId(),
                 row.getActionName(),
+                row.getDefinitionVersion(),
                 row.getBizKey(),
+                row.getIdempotencyKey(),
                 ActionStatus.valueOf(row.getStatus()),
                 row.getCurrentStepIndex(),
                 row.getTotalStepCount(),

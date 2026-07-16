@@ -8,6 +8,7 @@
         select id,
                action_instance_id as actionInstanceId,
                topic,
+               dispatch_id as dispatchId,
                status,
                available_at as availableAt,
                attempt_count as attemptCount,
@@ -20,15 +21,16 @@
 
     <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
         insert into action_outbox (
-            id, action_instance_id, topic, status, available_at, attempt_count, version, created_at, updated_at
+            id, action_instance_id, topic, dispatch_id, status, available_at, attempt_count, version, created_at, updated_at
         ) values (
-            #{id}, #{actionInstanceId}, #{topic}, #{status}, #{availableAt}, #{attemptCount}, #{version}, #{createdAt}, #{updatedAt}
+            #{id}, #{actionInstanceId}, #{topic}, #{dispatchId}, #{status}, #{availableAt}, #{attemptCount}, #{version}, #{createdAt}, #{updatedAt}
         )
     </insert>
 
     <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
         update action_outbox
         set topic = #{topic},
+            dispatch_id = #{dispatchId},
             status = #{status},
             available_at = #{availableAt},
             attempt_count = #{attemptCount},
@@ -42,6 +44,7 @@
         select id,
                action_instance_id as actionInstanceId,
                topic,
+               dispatch_id as dispatchId,
                status,
                available_at as availableAt,
                attempt_count as attemptCount,
@@ -58,6 +61,7 @@
         select id,
                action_instance_id as actionInstanceId,
                topic,
+               dispatch_id as dispatchId,
                status,
                available_at as availableAt,
                attempt_count as attemptCount,

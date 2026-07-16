@@ -55,6 +55,7 @@ public class InMemoryActionOutboxRepository implements ActionOutboxRepository {
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
+                outbox.dispatchId(),
                 outbox.status(),
                 outbox.availableAt(),
                 outbox.attemptCount(),

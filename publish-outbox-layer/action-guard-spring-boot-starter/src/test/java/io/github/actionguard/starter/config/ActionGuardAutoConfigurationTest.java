@@ -146,7 +146,7 @@ class ActionGuardAutoConfigurationTest {
     }
 
     @Test
-    void shouldMarkOutboxDeadWhenPublishAfterCommitFails() {
+    void shouldLeaveOutboxRecoverableWhenPublishAfterCommitFails() {
         new ApplicationContextRunner()
                 .withUserConfiguration(TransactionDispatchFailureTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
@@ -155,14 +155,12 @@ class ActionGuardAutoConfigurationTest {
                     ActionPublisher actionPublisher = context.getBean(ActionPublisher.class);
                     FailingActionExecutionMessageProducer producer = context.getBean(FailingActionExecutionMessageProducer.class);
 
-                    assertThatThrownBy(() -> actionPublisher.publish(new ActionRequest(
+                    actionPublisher.publish(new ActionRequest(
                             "order-cancel-flow",
                             "order:dispatch-failure",
                             Map.of("operator", "demo"),
                             List.of()
-                    )))
-                            .isInstanceOf(IllegalStateException.class)
-                            .hasMessageContaining("simulated producer failure");
+                    ));
 
                     assertThat(producer.attempted()).isEqualTo(1);
                     ActionInstance actionInstance = context.getBean(ActionInstanceRepository.class)
@@ -171,7 +169,7 @@ class ActionGuardAutoConfigurationTest {
                     ActionOutbox persistedOutbox = context.getBean(ActionOutboxRepository.class)
                             .findByActionInstanceId(actionInstance.id())
                             .orElseThrow();
-                    assertThat(persistedOutbox.status()).isEqualTo(ActionOutboxStatus.DEAD);
+                    assertThat(persistedOutbox.status()).isEqualTo(ActionOutboxStatus.NEW);
                 });
     }
 
@@ -208,7 +206,7 @@ class ActionGuardAutoConfigurationTest {
     }
 
     @Test
-    void shouldMarkOutboxDeadAfterRetryAttemptsExhausted() {
+    void shouldLeaveOutboxRecoverableAfterRetryAttemptsExhausted() {
         new ApplicationContextRunner()
                 .withUserConfiguration(TransactionDispatchRetryExhaustedTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
@@ -220,14 +218,12 @@ class ActionGuardAutoConfigurationTest {
                     ActionPublisher actionPublisher = context.getBean(ActionPublisher.class);
                     FailingActionExecutionMessageProducer producer = context.getBean(FailingActionExecutionMessageProducer.class);
 
-                    assertThatThrownBy(() -> actionPublisher.publish(new ActionRequest(
+                    actionPublisher.publish(new ActionRequest(
                             "order-cancel-flow",
                             "order:dispatch-retry-dead",
                             Map.of("operator", "demo"),
                             List.of()
-                    )))
-                            .isInstanceOf(IllegalStateException.class)
-                            .hasMessageContaining("simulated producer failure");
+                    ));
 
                     assertThat(producer.attempted()).isEqualTo(2);
                     ActionInstance actionInstance = context.getBean(ActionInstanceRepository.class)
@@ -236,7 +232,7 @@ class ActionGuardAutoConfigurationTest {
                     ActionOutbox persistedOutbox = context.getBean(ActionOutboxRepository.class)
                             .findByActionInstanceId(actionInstance.id())
                             .orElseThrow();
-                    assertThat(persistedOutbox.status()).isEqualTo(ActionOutboxStatus.DEAD);
+                    assertThat(persistedOutbox.status()).isEqualTo(ActionOutboxStatus.NEW);
                     assertThat(persistedOutbox.attemptCount()).isEqualTo(2);
                 });
     }

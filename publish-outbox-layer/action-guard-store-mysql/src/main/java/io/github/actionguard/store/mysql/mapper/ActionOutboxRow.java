@@ -7,6 +7,7 @@ public class ActionOutboxRow {
     private String id;
     private String actionInstanceId;
     private String topic;
+    private String dispatchId;
     private String status;
     private Timestamp availableAt;
     private int attemptCount;
@@ -20,6 +21,8 @@ public class ActionOutboxRow {
     public void setActionInstanceId(String actionInstanceId) { this.actionInstanceId = actionInstanceId; }
     public String getTopic() { return topic; }
     public void setTopic(String topic) { this.topic = topic; }
+    public String getDispatchId() { return dispatchId; }
+    public void setDispatchId(String dispatchId) { this.dispatchId = dispatchId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Timestamp getAvailableAt() { return availableAt; }

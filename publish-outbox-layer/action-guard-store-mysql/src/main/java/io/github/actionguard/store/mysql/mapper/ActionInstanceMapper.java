@@ -13,6 +13,8 @@ public interface ActionInstanceMapper {
 
     ActionInstanceRow selectByActionNameAndBizKey(@Param("actionName") String actionName, @Param("bizKey") String bizKey);
 
+    ActionInstanceRow selectByIdempotencyKey(String idempotencyKey);
+
     List<ActionInstanceRow> selectByStatusesUpdatedBefore(
             @Param("statuses") List<String> statuses,
             @Param("updatedBeforeOrAt") Timestamp updatedBeforeOrAt,
