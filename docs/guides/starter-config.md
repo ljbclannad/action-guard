@@ -8,7 +8,33 @@
 
 当前配置前缀统一为 `action.guard`。
 
+## 存储实现选择
+
+接入应用必须在自己的配置中显式声明 `action.guard.store.type`，没有默认值：
+
+```yaml
+action:
+  guard:
+    store:
+      type: mysql
+```
+
+| 值 | 自动装配行为 | 前置条件 |
+| --- | --- | --- |
+| `memory` | 启用整套内存仓储，进程退出后数据丢失 | Starter 即可，不要求 MySQL 模块或数据源 |
+| `mysql` | 启用 `store-mysql` 的 JDBC/MyBatis 仓储，不回退到内存 | 引入存储模块，配置数据源、对应驱动和事务管理器，并初始化表结构 |
+
+未配置、空值或其他值会导致启动失败。选择 `mysql` 但缺少存储模块或数据源时，会报告对应缺失条件；驱动和连接问题由数据源初始化报告，不能以启动校验替代真实数据库联调。
+
+模块依赖决定哪些实现可用，配置决定启用哪套实现。`memory` 不会禁用接入应用自身的数据源自动配置；即使数据源存在，框架也不会因此自动选择数据库仓储。现有自定义 Bean 覆盖机制保留，手工覆盖仓储时仍需自行保证整组实现和事务的一致性。
+
+`mysql` 表示当前 JDBC/MyBatis 存储实现，不是对 JDBC URL 的数据库类型校验。现有 H2 演示同样配置 `mysql`；切换真实 MySQL 时保留该值，增加运行时 `com.mysql:mysql-connector-j` 依赖，并修改 `spring.datasource` 的驱动、URL 和账号。
+
+治理查询和审计接口仍依赖 JDBC 数据库，不随 `memory` 自动变成内存版；带治理接口的 demo 应继续使用 `mysql`。
+
 ## 执行结果事务接入
+
+选择 `mysql` 时，存储自动配置在 Spring Boot 数据源自动配置之后、Starter 核心配置之前运行。存储模块复用已有 `ObjectMapper`，仅在缺少该类型 Bean 时创建默认实例；提供自定义实例会影响持久化 JSON 的序列化行为。
 
 Starter 将可用的 `PlatformTransactionManager` 注入默认执行回调。Step 结果、Action 状态、迁移日志及后续 Outbox 在同一个独立短事务内提交，Handler 调用和 MQ 发送放在该事务之外。
 

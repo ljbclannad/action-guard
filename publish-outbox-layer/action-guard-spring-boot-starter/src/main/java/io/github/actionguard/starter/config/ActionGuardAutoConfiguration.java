@@ -5,14 +5,19 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import javax.sql.DataSource;
 
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.util.ClassUtils;
 
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.definition.ActionDefinition;
@@ -22,15 +27,11 @@ import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.api.spi.ActionRetryPolicy;
 import io.github.actionguard.api.spi.ActionStepHandler;
 import io.github.actionguard.core.repository.ActionCompensationLogRepository;
-import io.github.actionguard.core.repository.ActionConsumeLogRepository;
 import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
-import io.github.actionguard.core.repository.InMemoryActionCompensationLogRepository;
-import io.github.actionguard.core.repository.InMemoryActionConsumeLogRepository;
-import io.github.actionguard.core.repository.InMemoryActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
 import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
 import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
@@ -71,7 +72,7 @@ import io.github.actionguard.starter.scheduler.ActionOutboxRecoveryScheduler;
  * <li>当前类通过 {@link EnableConfigurationProperties} 触发
  * {@link ActionGuardProperties} 绑定，将 {@code action.guard.*} 配置读入内存。</li>
  * <li>随后创建 Action Guard 运行时所需的核心 Bean，例如 definition registry、
- * publisher、execution callback、recovery service 以及默认的内存仓储实现。</li>
+ * publisher、execution callback、recovery service；仓储通过 store.type 显式选择。</li>
  * <li>demo 或业务应用可以继续声明自己的 {@code @Configuration} / {@code @Bean}，
  * 补充 MQ 拓扑、具体适配器 Bean，或者用自定义实现覆盖这里标注了
  * {@code @ConditionalOnMissingBean} 的默认 Bean。</li>
@@ -83,7 +84,28 @@ import io.github.actionguard.starter.scheduler.ActionOutboxRecoveryScheduler;
  */
 @AutoConfiguration
 @EnableConfigurationProperties(ActionGuardProperties.class)
+@Import(InMemoryActionGuardStoreConfiguration.class)
 public class ActionGuardAutoConfiguration {
+
+    /** 在运行时 Bean 实例化前检查选择条件，避免缺少数据库能力时回退到内存。 */
+    @Bean
+    public static BeanFactoryPostProcessor actionGuardStoreSelectionValidator(Environment environment) {
+        return beanFactory -> {
+            String type = environment.getProperty("action.guard.store.type");
+            if (!"memory".equalsIgnoreCase(type) && !"mysql".equalsIgnoreCase(type)) {
+                throw new IllegalStateException("必须显式配置 action.guard.store.type，支持 memory 或 mysql");
+            }
+            if ("mysql".equalsIgnoreCase(type)) {
+                if (!ClassUtils.isPresent("io.github.actionguard.store.mysql.MysqlActionGuardStoreAutoConfiguration",
+                        beanFactory.getBeanClassLoader())) {
+                    throw new IllegalStateException("action.guard.store.type=mysql 需要引入 action-guard-store-mysql 模块");
+                }
+                if (beanFactory.getBeanNamesForType(DataSource.class, false, false).length == 0) {
+                    throw new IllegalStateException("action.guard.store.type=mysql 需要配置 DataSource 和数据库驱动");
+                }
+            }
+        };
+    }
 
     @Bean
     public ActionPublisher actionPublisher(
@@ -259,48 +281,6 @@ public class ActionGuardAutoConfiguration {
                 actionObservabilityService,
                 clock,
                 transactionManager);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionInstanceRepository actionInstanceRepository() {
-        return new InMemoryActionInstanceRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionStepInstanceRepository actionStepInstanceRepository() {
-        return new InMemoryActionStepInstanceRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionOutboxRepository actionOutboxRepository() {
-        return new InMemoryActionOutboxRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionConsumeLogRepository actionConsumeLogRepository() {
-        return new InMemoryActionConsumeLogRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionGovernancePolicyRepository actionGovernancePolicyRepository() {
-        return new InMemoryActionGovernancePolicyRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionCompensationLogRepository actionCompensationLogRepository() {
-        return new InMemoryActionCompensationLogRepository();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ActionTransitionLogRepository actionTransitionLogRepository() {
-        return new InMemoryActionTransitionLogRepository();
     }
 
     @Bean

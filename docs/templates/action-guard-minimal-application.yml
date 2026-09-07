@@ -17,6 +17,8 @@ spring:
 
 action:
   guard:
+    store:
+      type: mysql
     definition-locations:
       - classpath*:actions/*.yml
       - classpath*:actions/*.yaml
@@ -35,7 +37,8 @@ action:
       queue: action.guard.execute.queue
       consumer-group: action-guard-app
 
-# 如果你切换到真实 MySQL，只需要把 datasource 改回 mysql JDBC url 和账号密码。
+# 切换真实 MySQL 时保留 store.type=mysql，补充运行时 mysql-connector-j 依赖，
+# 并将 datasource 驱动改为 com.mysql.cj.jdbc.Driver，配置 MySQL JDBC URL 和账号密码。
 #
 # 如果你接入了 webhook 告警模块，可按需打开：
 # action:

@@ -30,6 +30,8 @@ spring:
 
 action:
   guard:
+    store:
+      type: mysql
     definition-locations:
       - classpath*:actions/*.yml
     recovery:

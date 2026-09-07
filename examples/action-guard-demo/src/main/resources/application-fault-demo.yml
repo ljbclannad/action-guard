@@ -1,0 +1,9 @@
+server:
+  address: 127.0.0.1
+demo:
+  runner:
+    enabled: false
+action:
+  guard:
+    definition-locations:
+      - classpath*:fault-actions/*.yml

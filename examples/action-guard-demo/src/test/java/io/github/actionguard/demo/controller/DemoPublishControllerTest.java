@@ -1,10 +1,12 @@
 package io.github.actionguard.demo.controller;
 
 import io.github.actionguard.demo.ActionGuardDemoApplication;
+import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -15,6 +17,7 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,12 +27,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "demo.runner.enabled=false",
         "spring.datasource.url=jdbc:h2:mem:demo_publish_test;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
-        "spring.datasource.password="
+        "spring.datasource.password=",
+        "spring.rabbitmq.listener.simple.auto-startup=false",
+        "spring.rabbitmq.listener.direct.auto-startup=false",
+        "action.guard.recovery.enabled=false"
 })
 class DemoPublishControllerTest {
 
+    @MockBean
+    private ActionExecutionMessageProducer producer;
+
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    void shouldKeepFaultAndGovernanceEndpointsDisabledByDefault() throws Exception {
+        mockMvc.perform(post("/api/demo/scenarios/auto-retry")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/audit-logs")).andExpect(status().isNotFound());
+    }
 
     @Test
     void shouldPublishActionThroughHttpEndpoint() throws Exception {
@@ -53,5 +68,8 @@ class DemoPublishControllerTest {
         String actionInstanceId = matcher.group(1);
 
         assertThat(actionInstanceId).isNotBlank();
+        mockMvc.perform(get("/api/actions/{id}", actionInstanceId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actionInstanceId").value(actionInstanceId));
     }
 }

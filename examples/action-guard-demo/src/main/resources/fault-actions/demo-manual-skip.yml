@@ -1,0 +1,11 @@
+name: demo-manual-skip
+description: 第二步持续失败，在等待重试期间人工跳过并保留审计记录
+steps:
+  - name: prepare
+    stepType: DEMO_FAULT
+    target: success
+  - name: optional-downstream
+    stepType: DEMO_FAULT
+    target: always-fail
+    maxRetryCount: 10
+    retryBackoffMillis: 60000

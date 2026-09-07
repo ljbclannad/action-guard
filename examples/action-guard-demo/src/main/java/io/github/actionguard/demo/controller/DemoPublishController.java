@@ -9,6 +9,7 @@ import io.github.actionguard.demo.dto.DemoActionStatusResponse;
 import io.github.actionguard.demo.dto.DemoPublishRequest;
 import io.github.actionguard.demo.dto.DemoPublishResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.util.StringUtils;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@Profile("!fault-demo")
 @RequestMapping("/api")
 public class DemoPublishController {
 

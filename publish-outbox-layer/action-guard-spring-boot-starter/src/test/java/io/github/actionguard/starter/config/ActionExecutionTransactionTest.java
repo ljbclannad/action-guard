@@ -262,6 +262,7 @@ class ActionExecutionTransactionTest {
 
         private ApplicationContextRunner runnerWithoutTransactions() {
             return new ApplicationContextRunner()
+                    .withPropertyValues("action.guard.store.type=memory")
                     .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                     .withPropertyValues("action.guard.definition-locations=classpath:actions/order-cancel.yml")
                     .withBean(ActionInstanceRepository.class, () -> actions)

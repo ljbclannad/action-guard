@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ActionGuardAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withPropertyValues("action.guard.store.type=memory")
             .withUserConfiguration(TestStepHandlerConfiguration.class)
             .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class));
 
@@ -75,6 +76,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldRollbackActionAndStepWritesWhenOutboxWriteFails() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues("action.guard.definition-locations=classpath*:actions/*.yml")
@@ -99,6 +101,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldPublishOutboxMessageAfterTransactionCommit() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionDispatchTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues("action.guard.definition-locations=classpath*:actions/*.yml")
@@ -126,6 +129,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldNotPublishOutboxMessageWhenTransactionRollsBack() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionDispatchRollbackTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues("action.guard.definition-locations=classpath*:actions/*.yml")
@@ -149,6 +153,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldLeaveOutboxRecoverableWhenPublishAfterCommitFails() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionDispatchFailureTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues("action.guard.definition-locations=classpath*:actions/*.yml")
@@ -177,6 +182,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldRetryOutboxPublishBeforeMarkingDone() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionDispatchRetrySuccessTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues(
@@ -209,6 +215,7 @@ class ActionGuardAutoConfigurationTest {
     @Test
     void shouldLeaveOutboxRecoverableAfterRetryAttemptsExhausted() {
         new ApplicationContextRunner()
+                .withPropertyValues("action.guard.store.type=memory")
                 .withUserConfiguration(TransactionDispatchRetryExhaustedTestConfiguration.class)
                 .withConfiguration(AutoConfigurations.of(ActionGuardAutoConfiguration.class))
                 .withPropertyValues(

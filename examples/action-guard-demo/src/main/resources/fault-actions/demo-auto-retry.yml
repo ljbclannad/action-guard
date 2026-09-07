@@ -1,0 +1,11 @@
+name: demo-auto-retry
+description: 前序步骤成功，第二步首次失败后自动重试成功
+steps:
+  - name: prepare
+    stepType: DEMO_FAULT
+    target: success
+  - name: call-downstream
+    stepType: DEMO_FAULT
+    target: fail-once
+    maxRetryCount: 2
+    retryBackoffMillis: 5000

@@ -62,10 +62,22 @@
 
 应用侧至少要准备：
 
+- `action.guard.store.type`：H2 / MySQL JDBC 存储选择 `mysql`；仅内存运行选择 `memory`
 - `spring.datasource.*`
 - `spring.rabbitmq.*`
 
 ## 3. 添加应用配置
+
+接入项目必须显式设置 `action.guard.store.type`，框架不再根据依赖或数据源自动推断存储方式：
+
+```yaml
+action:
+  guard:
+    store:
+      type: mysql
+```
+
+该值选择 JDBC/MyBatis 仓储，H2 演示同样适用。真实 MySQL 还需在应用中引入运行时 `mysql-connector-j`，配置 `com.mysql.cj.jdbc.Driver` 和 MySQL 连接信息。纯内存测试可配置 `memory`，不具备持久化保证。
 
 可以直接从模板复制：
 
