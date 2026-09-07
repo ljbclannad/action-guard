@@ -1,5 +1,9 @@
 # 数据模型
 
+文档入口：[文档导航](../README.md)。
+
+阅读边界：本文包含模型建议和建议字段，实际表名、列与索引以 [当前 Schema](../../publish-outbox-layer/action-guard-store-mysql/src/main/resources/db/action-guard-mysql-schema.sql) 为准，本文不作为数据库迁移脚本。
+
 ## 目标
 
 数据模型必须让框架具备可恢复、可治理和集群安全的能力。

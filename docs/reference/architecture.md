@@ -1,5 +1,7 @@
 # 架构设计
 
+文档入口：[文档导航](../README.md)。
+
 ## 目标
 
 `action-guard` 提供了一种在本地事务提交后，可靠编排异步业务副作用的方式。
@@ -18,6 +20,21 @@
 - 明确区分业务事务成功与下游副作用成功。
 
 ## 分层架构
+
+### 模块职责
+
+| 模块 | 主要职责与代码入口 |
+| --- | --- |
+| `action-guard-api` | 公共请求、定义模型、Handler 等 SPI |
+| `action-guard-core` | `model` / `repository` 数据边界，`runtime` 下的发布、执行、状态迁移、恢复、补偿与观测 |
+| `action-guard-spring-boot-starter` | `config` 自动装配、`publisher` 事务接入、`scheduler` 调度、`properties` 配置绑定 |
+| `action-guard-store-mysql` | MyBatis 映射及 JDBC 仓储，当前覆盖实例、Outbox、消费、迁移和补偿日志等 |
+| `action-guard-adapter-rabbitmq` | `producer` 发送、`consumer` 消费，`support` 下的 ACK 与失败决策 |
+| `action-guard-adapter-notify` / `action-guard-adapter-im` | `handler` 解析与路由，`sender` 厂商接口，`model` 能力请求与结果 |
+| `action-guard-alert-webhook` | 将标准告警投递到 Webhook |
+| `action-guard-ops-api` / `action-guard-ops-web` | 治理查询、人工命令、审计，以及独立启动入口 |
+
+应用按需引入适配器，Starter 不会自动引入全部能力模块。接入组合统一见快速开始，包结构以当前源码为准。
 
 ### 1. 能力层
 
@@ -379,9 +396,9 @@ at-least-once 投递是默认前提，重复消费安全是强制要求。
 
 1. runtime 加载定义和实例状态
 2. runtime 找到当前串行步骤
-3. runtime 调用 Step Handler
-4. runtime 持久化 Step 结果
-5. runtime 决定推进到下一步还是安排重试
+3. runtime 在结果事务外调用 Step Handler
+4. runtime 在一个短事务内持久化 Step 结果、推进 Action、记录迁移日志，并按需调度后续 Outbox
+5. 事务提交后，runtime 尝试发送已到期的 Outbox；未到期或发送失败的任务由恢复扫描接管
 
 如果后面还有步骤，publish / outbox 层会生成下一份可执行任务，再由消息执行层异步投递。
 
@@ -504,7 +521,17 @@ Action 最终会进入以下终态之一：
 
 ### 边界 B：运行时状态推进
 
-每个 Step 执行结果都必须在 worker 释放执行权之前可靠提交。框架绝不能在远程副作用已经发生后，仍然依赖内存中的“未落库进度”。
+默认执行回调通过 `TransactionTemplate` 建立结果事务，成功、可重试失败和终态失败共用以下边界：
+
+- Handler 执行在结果事务之外。如果调用方已有同一事务管理器管理的事务，执行回调会先将其挂起。
+- Handler 返回后，在 `REQUIRES_NEW` 短事务内保存 Step、Action 和迁移日志；需要下一步或业务重试时，同事务写入 Outbox 的新 `dispatchId`、状态和可执行时间。
+- 任一写入或版本校验失败，整组数据库变更回滚，异常交由消费端处理；不会提前发送下一步消息。
+- 结果事务提交并完成资源清理后，才通过 `ActionOutboxDispatcher` 即时投递。投递失败不回滚已提交的结果，Outbox 留待恢复。
+- 事务内产生的告警和指标仅在提交后发出，回滚时丢弃；提交后的监控异常记录日志，不阻断后续投递。
+
+上述原子性要求全部结果仓储使用同一数据源并参与同一个 `PlatformTransactionManager`。内存仓储不具备数据库回滚能力，跨数据源也不在本地事务保障范围内；接入条件见 [Starter 配置](../guides/starter-config.md)。
+
+数据库回滚不能撤销已经发生的下游副作用。Handler 成功后若结果落库失败，消费重试可能再次调用 Handler，仍必须使用业务幂等。这次事务边界针对正向步骤执行结果，不代表补偿、人工治理或首次发布后的投递都具备相同的事务实现。
 
 ## 第一版明确支持的能力
 

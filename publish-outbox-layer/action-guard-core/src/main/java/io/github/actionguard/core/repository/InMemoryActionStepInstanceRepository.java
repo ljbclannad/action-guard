@@ -1,12 +1,12 @@
 package io.github.actionguard.core.repository;
 
-import io.github.actionguard.core.model.ActionStepInstance;
-import org.springframework.dao.OptimisticLockingFailureException;
-
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.springframework.dao.OptimisticLockingFailureException;
+
+import io.github.actionguard.core.model.ActionStepInstance;
 
 public class InMemoryActionStepInstanceRepository implements ActionStepInstanceRepository {
 
@@ -19,7 +19,8 @@ public class InMemoryActionStepInstanceRepository implements ActionStepInstanceR
                 return stepInstance;
             }
             if (existing.version() != stepInstance.version()) {
-                throw new OptimisticLockingFailureException("ActionStepInstance version conflict: " + stepInstance.id());
+                throw new OptimisticLockingFailureException(
+                        "ActionStepInstance version conflict: " + stepInstance.id());
             }
             return withNextVersion(stepInstance, existing.version());
         });
@@ -54,7 +55,6 @@ public class InMemoryActionStepInstanceRepository implements ActionStepInstanceR
                 stepInstance.lastErrorMessage(),
                 currentVersion + 1,
                 stepInstance.createdAt(),
-                stepInstance.updatedAt()
-        );
+                stepInstance.updatedAt());
     }
 }

@@ -1,4 +1,6 @@
-# StepType 扩展指南
+# Action 定义与步骤扩展
+
+文档入口：[文档导航](../README.md)。
 
 ## 目标
 
@@ -7,6 +9,48 @@
 1. 什么时候应该新增一个 `stepType`
 2. 新增后要提供哪些代码和配置
 3. 怎么保证它能被 runtime 正确加载、执行和治理
+
+## 当前定义字段
+
+当前 YAML 加载器接受以下字段，配置时使用扁平的重试与超时字段：
+
+| 层级 | 字段 | 含义 |
+| --- | --- | --- |
+| Action | `name`、`steps` | 定义名称、有序步骤列表 |
+| Action | `version` | 定义版本，缺省为 `1`；目前不等于已实现运行期多版本隔离 |
+| Action | `description`、`compensationEnabled` | 描述、补偿开关；补偿缺省关闭 |
+| Step | `name`、`stepType`、`target` | 步骤名、能力类型、provider 或路由目标 |
+| Step | `maxRetryCount` | 与 `ActionRetryPolicy` 共同决定可重试次数 |
+| Step | `retryBackoffMillis` | 重试等待毫秒数，未到期的 Outbox 由恢复扫描处理 |
+| Step | `timeoutMillis` | Handler 返回后检查执行耗时，不主动中断阻塞调用 |
+
+```yaml
+name: order-label-flow
+version: 1
+description: 同步订单标签
+compensationEnabled: false
+steps:
+  - name: sync-order-label
+    stepType: ORDER_LABEL_SYNC
+    target: order-service
+    maxRetryCount: 3
+    retryBackoffMillis: 5000
+    timeoutMillis: 10000
+```
+
+请求参数通过 `ActionRequest.attributes` 和 `ActionStepRequest.payload` 传入；Handler 从 `ActionStepContext` 读取它们。当前 YAML 加载器不会自动执行请求模板或表达式。
+
+以 [YAML 加载器](../../publish-outbox-layer/action-guard-core/src/main/java/io/github/actionguard/core/runtime/definition/YamlActionDefinitionLoader.java) 和 [定义校验器](../../publish-outbox-layer/action-guard-core/src/main/java/io/github/actionguard/core/runtime/definition/ActionDefinitionValidator.java) 为实际支持范围：校验定义与步骤名称、非空步骤、重复步骤名和重试/超时数值等。Handler 类型还需与运行时注册表匹配。
+
+旧设计中的嵌套 `defaults.retry`、`timeout: 10s`、请求模板、步骤级补偿 DSL、自定义幂等表达式及多版本定义中心仍属于规划，不能照此配置并假定生效；DAG、并行分支和复杂条件 DSL 也不在当前范围内。
+
+## 执行契约
+
+- `stepType` 在 Handler 注册表中唯一；`target` 由能力 Handler 解释与路由，不直接等于 Spring Bean 名。
+- Handler 返回 `StepExecutionResult.succeeded()` 或 `failed(errorCode, errorMessage)`，重试与终态选择由 `ActionRetryPolicy` 决定，返回值本身没有独立的可重试标记。
+- 结果落库失败或消息恢复可能导致再次执行，幂等键应来自稳定业务标识，并在可行时透传下游。Action 发布幂等不能替代 Step 的副作用幂等。
+- 补偿通过独立的 `ActionCompensator` 扩展，业务负责界定哪些副作用可撤销；启用补偿不等于获得分布式回滚能力。
+- 变更步骤顺序或类型前处理仍在运行的旧 Action；定义版本兼容性见维护文档。
 
 ## 什么时候应该新增一个 `stepType`
 
@@ -134,14 +178,14 @@ class SyncOrderLabelStepHandler implements ActionStepHandler {
 - 暂时不打算抽象成共享模块
 - 业务语义强于平台语义
 
-## YAML 设计建议
+## 步骤命名与参数
 
 新增 `stepType` 后，建议同步约束 YAML 写法：
 
 - `name` 表达业务步骤名
 - `stepType` 表达能力类型
 - `target` 表达 provider 或业务路由目标
-- `attributes` 只放执行所需参数
+- 执行参数通过发布请求传入，YAML 只声明加载器支持的定义字段
 
 例如：
 
@@ -150,8 +194,6 @@ steps:
   - name: apply-order-tag
     stepType: CRM_TAG_APPLY
     target: salesforce-main
-    attributes:
-      tagCode: cancelled
 ```
 
 ## 重试 / 超时 / 补偿设计考虑
@@ -167,7 +209,7 @@ steps:
 推荐做法：
 
 - provider 侧以业务幂等键兜底
-- handler 侧只返回清晰的成功 / 可重试失败 / 不可重试失败
+- handler 侧返回清晰的成功或失败结果及错误码，重试策略负责分类
 - 补偿逻辑单独建 compensator，不把正向和逆向逻辑混在一起
 
 ## 治理可见性要求

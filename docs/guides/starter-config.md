@@ -1,10 +1,22 @@
 # Starter 配置说明
 
+文档入口：[文档导航](../README.md)。
+
 ## 目的
 
 这份文档汇总 `action-guard-spring-boot-starter` 当前已经生效的默认配置项，作为接入时的第一参考。
 
 当前配置前缀统一为 `action.guard`。
+
+## 执行结果事务接入
+
+Starter 将可用的 `PlatformTransactionManager` 注入默认执行回调。Step 结果、Action 状态、迁移日志及后续 Outbox 在同一个独立短事务内提交，Handler 调用和 MQ 发送放在该事务之外。
+
+- 数据库模式下，四类结果仓储必须使用同一数据源，并由所注入的事务管理器管理。多个事务管理器存在时，需要通过 `@Primary` 明确选择正确的管理器。
+- 未配置事务管理器时，仅框架内置的全内存结果仓储组合允许启动；自定义或数据库结果仓储会在自动装配时报告缺少事务管理器。内存运行用于演示和测试，不提供数据库事务原子性。
+- 单独使用 Core 或手动构造 `DefaultActionExecutionCallback` 时，数据库模式需使用接收 `Optional<PlatformTransactionManager>` 的构造器并传入管理器。旧的无管理器构造方式仅适用于内存运行。
+- 调用方已有事务时，执行回调挂起它并独立提交执行结果，调用方随后回滚不会撤销执行结果。因此仅对已经提交的 Action 发起执行回调。
+- 进程可能在结果提交后、消息发送前退出。需要持续恢复能力时启用恢复扫描；不将即时投递当作唯一保障。
 
 ## 核心配置项
 
@@ -52,7 +64,7 @@
 
 完整指标语义见：
 
-- [可观测性说明](/Users/lejinbo/LLM/action-guard/docs/observability.md)
+- [可观测性说明](ops-governance.md#告警与指标)
 
 ## 恢复扫描配置项
 
@@ -115,6 +127,6 @@
 
 推荐同时参考：
 
-- [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
-- [模块选择建议](/Users/lejinbo/LLM/action-guard/docs/module-selection.md)
-- [应用配置模板 YAML](/Users/lejinbo/LLM/action-guard/docs/templates/action-guard-minimal-application.yml)
+- [快速开始](quick-start.md)
+- [模块选择建议](quick-start.md#模块选择)
+- [应用配置模板 YAML](../templates/action-guard-minimal-application.yml)

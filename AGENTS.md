@@ -35,7 +35,7 @@ action-guard 面向 Spring Boot 应用，为主交易提交后的异步副作用
 | 能力层的 IM、Notify 等适配器 | 将步骤上下文转换为能力请求，通过 Sender 接口连接厂商实现 |
 | `action-guard-ops-api` / `action-guard-ops-web` | 人工治理、查询、审计，以及独立应用入口 |
 
-使用非主路径模块前，核对实际实现与 [模块选择建议](docs/module-selection.md)，区分已实现能力与规划。评估内存实现是否需要保留时，检查其测试和演示用途。
+使用非主路径模块前，核对实际实现与 [模块选择建议](docs/guides/quick-start.md#模块选择)，区分已实现能力与规划。评估内存实现是否需要保留时，检查其测试和演示用途。
 
 ## 核心执行约束
 
@@ -73,15 +73,17 @@ action-guard 面向 Spring Boot 应用，为主交易提交后的异步副作用
 
 ## 按任务阅读文档
 
+完整目录见 [文档导航](docs/README.md)。接入操作位于 `docs/guides/`，架构与模型位于 `docs/reference/`，版本和维护流程位于 `docs/maintenance/`。
+
 | 任务 | 阅读入口 |
 | --- | --- |
-| 调整模块归属、依赖或执行链路 | [模块架构](docs/module-architecture.md)、[架构设计](docs/architecture.md) |
-| 修改 YAML 加载、定义模型或校验 | [定义规范](docs/definition-spec.md)，并核对加载器实际支持的字段，避免将设计字段当成已实现能力 |
-| 修改 Starter 配置或接入方式 | [Starter 配置](docs/starter-config.md)、[快速开始](docs/quick-start.md) |
-| 修改表结构、Repository、计数或状态持久化 | [数据模型](docs/data-model.md)，并核对当前 SQL 和映射实现 |
-| 新增 StepType、Handler 或厂商适配 | [StepType 扩展指南](docs/step-type-extension-guide.md) |
-| 修改人工重试、取消、跳过或补偿 | [治理操作](docs/ops-governance.md) |
-| 修改指标、告警或审计输出 | [可观测性说明](docs/observability.md) |
-| 修改公共契约或执行已授权的发布任务 | [兼容性与版本](docs/compatibility-and-versioning.md)、[发布纪律](docs/release-discipline.md) |
+| 调整模块归属、依赖或执行链路 | [运行时架构与模块职责](docs/reference/architecture.md) |
+| 修改 YAML 加载、定义模型或校验 | [当前定义字段](docs/guides/step-type-extension-guide.md#当前定义字段)，并核对加载器实际支持的字段，避免将设计字段当成已实现能力 |
+| 修改 Starter 配置或接入方式 | [Starter 配置](docs/guides/starter-config.md)、[快速开始](docs/guides/quick-start.md) |
+| 修改表结构、Repository、计数或状态持久化 | [数据模型](docs/reference/data-model.md)，并核对当前 SQL 和映射实现 |
+| 新增 StepType、Handler 或厂商适配 | [Action 定义与步骤扩展](docs/guides/step-type-extension-guide.md) |
+| 修改人工重试、取消、跳过或补偿 | [治理与可观测性](docs/guides/ops-governance.md) |
+| 修改指标、告警或审计输出 | [告警与指标](docs/guides/ops-governance.md#告警与指标) |
+| 修改公共契约或执行已授权的发布任务 | [版本演进与项目维护](docs/maintenance/compatibility-and-versioning.md) |
 
 文档与实现不一致时，明确指出差异；描述当前行为以代码和验证结果为依据，期望行为以本次确认的需求为依据。调整上述边界或入口时同步维护本文件，替换失效规则，避免不断追加历史约束。历史执行结果、临时任务清单和待修复问题保留在相应交付说明或项目文档中。

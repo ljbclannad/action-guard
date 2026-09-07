@@ -25,6 +25,10 @@ import io.github.actionguard.core.runtime.registry.StepHandlerRegistry;
 import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
 import io.github.actionguard.core.runtime.state.ActionTransitionService;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -53,12 +57,13 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private final ActionRetryPolicy actionRetryPolicy;
     private final ActionOutboxRepository actionOutboxRepository;
     private final ActionTransitionLogRepository actionTransitionLogRepository;
-    private final Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer;
     private final ActionObservabilityService actionObservabilityService;
     private final ActionTransitionService actionTransitionService;
     private final ActionExecutionRuntimeService actionExecutionRuntimeService;
     private final Clock clock;
     private final ActionOutboxDispatcher outboxDispatcher;
+    private final TransactionOperations resultTransactions;
+    private final TransactionOperations outsideTransactions;
 
     public DefaultActionExecutionCallback(
             ActionInstanceRepository actionInstanceRepository,
@@ -95,18 +100,9 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             ActionObservabilityService actionObservabilityService,
             Clock clock
     ) {
-        this(
-                actionInstanceRepository,
-                actionStepInstanceRepository,
-                actionDefinitionRegistry,
-                stepHandlerRegistry,
-                actionRetryPolicy,
-                actionOutboxRepository,
-                new InMemoryActionTransitionLogRepository(),
-                actionExecutionMessageProducer,
-                actionObservabilityService,
-                clock
-        );
+        this(actionInstanceRepository, actionStepInstanceRepository, actionDefinitionRegistry, stepHandlerRegistry,
+                actionRetryPolicy, actionOutboxRepository, new InMemoryActionTransitionLogRepository(), actionExecutionMessageProducer,
+                actionObservabilityService, clock, Optional.empty());
     }
 
     public DefaultActionExecutionCallback(
@@ -121,6 +117,35 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             ActionObservabilityService actionObservabilityService,
             Clock clock
     ) {
+        this(
+                actionInstanceRepository,
+                actionStepInstanceRepository,
+                actionDefinitionRegistry,
+                stepHandlerRegistry,
+                actionRetryPolicy,
+                actionOutboxRepository,
+                actionTransitionLogRepository,
+                actionExecutionMessageProducer,
+                actionObservabilityService,
+                clock,
+                Optional.empty()
+        );
+    }
+
+    /** 数据库仓储需传入管理同一数据源的事务管理器；无管理器的构造方式仅用于内存运行。 */
+    public DefaultActionExecutionCallback(
+            ActionInstanceRepository actionInstanceRepository,
+            ActionStepInstanceRepository actionStepInstanceRepository,
+            ActionDefinitionRegistry actionDefinitionRegistry,
+            StepHandlerRegistry stepHandlerRegistry,
+            ActionRetryPolicy actionRetryPolicy,
+            ActionOutboxRepository actionOutboxRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository,
+            Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
+            ActionObservabilityService actionObservabilityService,
+            Clock clock,
+            Optional<PlatformTransactionManager> transactionManager
+    ) {
         this.actionInstanceRepository = Objects.requireNonNull(actionInstanceRepository, "actionInstanceRepository must not be null");
         this.actionStepInstanceRepository = Objects.requireNonNull(actionStepInstanceRepository, "actionStepInstanceRepository must not be null");
         this.actionDefinitionRegistry = Objects.requireNonNull(actionDefinitionRegistry, "actionDefinitionRegistry must not be null");
@@ -128,7 +153,6 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         this.actionRetryPolicy = Objects.requireNonNull(actionRetryPolicy, "actionRetryPolicy must not be null");
         this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
         this.actionTransitionLogRepository = Objects.requireNonNull(actionTransitionLogRepository, "actionTransitionLogRepository must not be null");
-        this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
         this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
         this.actionTransitionService = new ActionTransitionService(
                 this.actionInstanceRepository,
@@ -141,6 +165,18 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         );
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.outboxDispatcher = new ActionOutboxDispatcher(actionOutboxRepository, actionExecutionMessageProducer, actionObservabilityService, clock);
+        this.resultTransactions = transactionManager
+                .<TransactionOperations>map(manager -> transactionTemplate(manager, TransactionDefinition.PROPAGATION_REQUIRES_NEW))
+                .orElseGet(TransactionOperations::withoutTransaction);
+        this.outsideTransactions = transactionManager
+                .<TransactionOperations>map(manager -> transactionTemplate(manager, TransactionDefinition.PROPAGATION_NOT_SUPPORTED))
+                .orElseGet(TransactionOperations::withoutTransaction);
+    }
+
+    private static TransactionTemplate transactionTemplate(PlatformTransactionManager manager, int propagation) {
+        TransactionTemplate template = new TransactionTemplate(manager);
+        template.setPropagationBehavior(propagation);
+        return template;
     }
 
     public DefaultActionExecutionCallback(
@@ -170,6 +206,10 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
     @Override
     public void execute(ActionExecutionMessage message) {
+        outsideTransactions.executeWithoutResult(status -> executeOutsideTransaction(message));
+    }
+
+    private void executeOutsideTransaction(ActionExecutionMessage message) {
         ActionInstance actionInstance = actionInstanceRepository.findById(message.actionInstanceId())
                 .orElseThrow(() -> new IllegalArgumentException("ActionInstance not found: " + message.actionInstanceId()));
         // 终态动作天然幂等，重复投递的执行消息在这里直接短路，避免重复推进状态。
@@ -209,14 +249,16 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         Instant completedAt = clock.instant();
         StepExecutionResult effectiveResult = applyTimeoutIfExceeded(result, stepDefinition, startedAt, completedAt);
 
-        if (effectiveResult.success()) {
-            handleStepSuccess(actionInstance, currentStep);
-            return;
+        ActionOutbox scheduledOutbox = resultTransactions.execute(status -> effectiveResult.success()
+                ? handleStepSuccess(actionInstance, currentStep)
+                : handleStepFailure(actionInstance, currentStep, stepDefinition, effectiveResult));
+        // execute 返回时结果事务已提交并释放连接，后续发送不占用结果事务。
+        if (scheduledOutbox != null) {
+            outboxDispatcher.dispatch(scheduledOutbox, 1);
         }
-        handleStepFailure(actionInstance, currentStep, stepDefinition, effectiveResult);
     }
 
-    private void handleStepSuccess(ActionInstance actionInstance, ActionStepInstance currentStep) {
+    private ActionOutbox handleStepSuccess(ActionInstance actionInstance, ActionStepInstance currentStep) {
         Instant now = clock.instant();
         int nextStepIndex = currentStep.stepIndex() + 1;
         ActionExecutionProgress progress = actionExecutionRuntimeService.completeStepSuccess(
@@ -234,11 +276,12 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         }
         if (nextStatus == ActionStatus.DISPATCHING) {
             // 只有在还有后续 step 时才继续投递下一条执行消息，第一版始终保持严格串行。
-            dispatchNextStep(advanced, now);
+            return scheduleOutbox(advanced.id(), now, false);
         }
+        return null;
     }
 
-    private void handleStepFailure(
+    private ActionOutbox handleStepFailure(
             ActionInstance actionInstance,
             ActionStepInstance currentStep,
             ActionStepDefinition stepDefinition,
@@ -273,8 +316,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                     now
             );
             ActionInstance retrying = retryTransition.transitionResult().actionInstance();
-            dispatchRetry(retrying, now.plusMillis(resolvedBackoffMillis(stepDefinition, retryAction)));
-            return;
+            return scheduleOutbox(retrying.id(), now.plusMillis(resolvedBackoffMillis(stepDefinition, retryAction)), true);
         }
         // 走到这里说明当前策略已经放弃继续执行，action 进入 FAILED，等待人工治理或补偿链路接管。
         ActionTransitionExecution terminalFailureTransition = actionExecutionRuntimeService.transitionFailure(
@@ -291,6 +333,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 result.errorCode()
         );
         actionObservabilityService.retryExhausted(actionInstance, failedStep, result.errorCode(), errorMessage);
+        return null;
     }
 
     private String normalizedErrorMessage(StepExecutionResult result) {
@@ -305,19 +348,11 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 : ex.getMessage();
     }
 
-    private void dispatchNextStep(ActionInstance actionInstance, Instant now) {
-        dispatchOutbox(actionInstance.id(), now, false);
-    }
-
-    private void dispatchRetry(ActionInstance actionInstance, Instant now) {
-        dispatchOutbox(actionInstance.id(), now, true);
-    }
-
-    private void dispatchOutbox(String actionInstanceId, Instant availableAt, boolean incrementAttemptCount) {
+    private ActionOutbox scheduleOutbox(String actionInstanceId, Instant availableAt, boolean incrementAttemptCount) {
         ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
                 .orElseThrow(() -> new IllegalStateException("Outbox not found for actionInstanceId: " + actionInstanceId));
-        // New logical work (next step or business retry) must not share the consumed message id.
-        ActionOutbox scheduledOutbox = actionOutboxRepository.save(new ActionOutbox(
+        // 下一步和业务重试是新的逻辑任务，必须生成新的消息标识。
+        return actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
@@ -329,11 +364,6 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 outbox.createdAt(),
                 clock.instant()
         ));
-        if (actionExecutionMessageProducer.isEmpty() || availableAt.isAfter(clock.instant())) {
-            return;
-        }
-        // 只有“立即可执行”的消息才在当前线程直接尝试投递；延迟重试交给 recovery/scheduler 再次扫描。
-        outboxDispatcher.dispatch(scheduledOutbox, 1);
     }
 
     private ActionStepDefinition resolveStepDefinition(ActionInstance actionInstance, ActionStepInstance currentStep) {

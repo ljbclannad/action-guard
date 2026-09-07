@@ -14,15 +14,7 @@
 
 ## 开始之前
 
-建议先阅读：
-
-1. [README.md](/Users/lejinbo/LLM/action-guard/README.md)
-2. [架构设计](/Users/lejinbo/LLM/action-guard/docs/architecture.md)
-3. [快速开始](/Users/lejinbo/LLM/action-guard/docs/quick-start.md)
-4. [可观测性说明](/Users/lejinbo/LLM/action-guard/docs/observability.md)
-5. [兼容性与版本策略](/Users/lejinbo/LLM/action-guard/docs/compatibility-and-versioning.md)
-6. [公开发布准备](/Users/lejinbo/LLM/action-guard/docs/public-release-readiness.md)
-7. [发布纪律](/Users/lejinbo/LLM/action-guard/docs/release-discipline.md)
+先阅读 [项目介绍](README.md)，再从 [文档导航](docs/README.md) 选择本次任务涉及的接入或设计资料。代理协作遵循 [AGENTS.md](AGENTS.md)；准备发布时再阅读维护类文档。
 
 ## 开发原则
 
@@ -85,4 +77,4 @@ bash scripts/run-demo-stability.sh
 
 如果问题涉及潜在安全风险，请优先参考：
 
-- [SECURITY.md](/Users/lejinbo/LLM/action-guard/SECURITY.md)
+- [SECURITY.md](SECURITY.md)

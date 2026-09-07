@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.definition.ActionDefinition;
@@ -100,7 +101,7 @@ public class ActionGuardAutoConfiguration {
                 actionInstanceRepository,
                 actionStepInstanceRepository,
                 actionOutboxRepository,
-                clock), actionInstanceRepository, actionOutboxRepository, actionExecutionMessageProducer,
+                clock), actionOutboxRepository, actionExecutionMessageProducer,
                 properties.getPublishRetryMaxAttempts(), actionObservabilityService);
     }
 
@@ -236,7 +237,15 @@ public class ActionGuardAutoConfiguration {
             ActionTransitionLogRepository actionTransitionLogRepository,
             Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer,
             ActionObservabilityService actionObservabilityService,
-            Clock clock) {
+            Clock clock,
+            Optional<PlatformTransactionManager> transactionManager) {
+        if (transactionManager.isEmpty()
+                && !(actionInstanceRepository instanceof InMemoryActionInstanceRepository
+                        && actionStepInstanceRepository instanceof InMemoryActionStepInstanceRepository
+                        && actionOutboxRepository instanceof InMemoryActionOutboxRepository
+                        && actionTransitionLogRepository instanceof InMemoryActionTransitionLogRepository)) {
+            throw new IllegalStateException("数据库执行结果落库需要配置 PlatformTransactionManager，并与全部结果仓储使用同一数据源");
+        }
         // 执行回调是 runtime 的核心协调点：消费 MQ 消息后，最终都会落到这里推进 step 状态机。
         return new DefaultActionExecutionCallback(
                 actionInstanceRepository,
@@ -248,7 +257,8 @@ public class ActionGuardAutoConfiguration {
                 actionTransitionLogRepository,
                 actionExecutionMessageProducer,
                 actionObservabilityService,
-                clock);
+                clock,
+                transactionManager);
     }
 
     @Bean
@@ -299,6 +309,38 @@ public class ActionGuardAutoConfiguration {
         return Clock.systemUTC();
     }
 
+    /**
+     * 扫描配置的资源路径，并委托加载器将每个资源转换为一个 Action 定义。
+     *
+     * <p>例如，路径模式 {@code classpath*:actions/*.yml} 匹配到
+     * {@code actions/order-paid.yml}，文件内容为：
+     * <pre>{@code
+     * name: order-paid
+     * version: 1
+     * description: 订单支付后发送通知
+     * compensationEnabled: false
+     * steps:
+     *   - name: send-notification
+     *     stepType: NOTIFY
+     *     target: order-paid-notification
+     *     maxRetryCount: 3
+     *     retryBackoffMillis: 1000
+     *     timeoutMillis: 5000
+     * }</pre>
+     * <p>使用默认的 YAML 加载器时，{@code loader.load(resource.getURL().toString())}
+     * 返回的对象等价于：
+     * <pre>{@code
+     * new ActionDefinition(
+     *         "order-paid", 1, "订单支付后发送通知", false,
+     *         List.of(new ActionStepDefinition(
+     *                 "send-notification", "NOTIFY", "order-paid-notification",
+     *                 3, 1000L, 5000L
+     *         ))
+     * )
+     * }</pre>
+     * <p>YAML 顶层字段映射到 ActionDefinition，steps 中的每一项按顺序映射到
+     * ActionStepDefinition；本方法将各文件的转换结果汇总到 definitions 列表中。
+     */
     private List<ActionDefinition> loadDefinitions(ActionDefinitionLoader loader, ActionGuardProperties properties) {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         List<ActionDefinition> definitions = new ArrayList<>();

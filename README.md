@@ -6,7 +6,7 @@
 
 当前仓库状态：`early preview`。
 
-项目仍在持续完善，当前重点是验证和打磨“可靠发布、串行执行、恢复与治理”的完整主链路。模块划分、内部接口和配置可能随需求调整，暂不承诺稳定生产版本的兼容性；涉及公共契约和存量数据的变化，需要说明影响及迁移方式，参见 [兼容性与版本策略](./docs/compatibility-and-versioning.md)。
+项目仍在持续完善，当前重点是验证和打磨“可靠发布、串行执行、恢复与治理”的完整主链路。模块划分、内部接口和配置可能随需求调整，暂不承诺稳定生产版本的兼容性；涉及公共契约和存量数据的变化，需要说明影响及迁移方式，参见 [兼容性与版本策略](docs/maintenance/compatibility-and-versioning.md)。
 
 ## 适用场景
 
@@ -34,6 +34,7 @@
 ## 核心能力
 
 - 基于 Outbox 的可靠发布
+- 基于同一数据源的步骤执行结果事务提交
 - 基于 MQ 的异步步骤投递与执行
 - 基于 YAML 的 Action 定义加载
 - 严格串行步骤编排
@@ -45,7 +46,7 @@
 ## 当前接入与能力边界
 
 - 推荐主路径为 `starter + rabbitmq + store-mysql`，再接入业务 `ActionStepHandler` 或能力适配模块。本地演示使用 H2 文件库，MySQL 接入需单独配置与验证。
-- Kafka、Redis 模块目前属于占位或待完善能力，不作为默认接入组合；具体选择参见 [模块选择建议](./docs/module-selection.md)。
+- Kafka、Redis 模块目前属于占位或待完善能力，不作为默认接入组合；具体选择参见 [模块选择建议](docs/guides/quick-start.md#模块选择)。
 - 步骤超时目前在 Handler 返回后判定，不会主动中断阻塞调用；下游客户端仍需配置超时。
 - MQ 发送与数据库状态更新不是原子操作，恢复可能重复投递。消费去重不能替代业务 Handler 和下游系统的幂等处理。
 - YAML 配置以当前加载器实际支持的字段为准；规划中的能力不代表当前已可用。
@@ -87,10 +88,12 @@ flowchart LR
 3. 事务提交后，`ActionOutboxDispatcher` 抢占 Outbox，再通过消息生产者投递到 MQ。
 4. MQ consumer 收到消息后，调用 `ActionExecutionCallback`。
 5. Runtime 根据 Action 定义找到当前步骤，调用对应 `ActionStepHandler`。
-6. 执行成功则推进到下一步；执行失败则进入重试、补偿、告警或人工治理。
+6. Handler 返回后，在短事务内保存步骤结果、Action 状态、迁移日志及所需的后续 Outbox；提交后再投递下一步或重试消息。终态失败交由补偿或人工治理处理。
 7. 如果即时投递失败或节点中断，recovery 链路会继续扫描 outbox 并补发。
 
 首次发布、步骤推进和恢复扫描共用单条 Outbox 投递逻辑：抢占为 `CLAIMED`，发送成功后保存 `DONE`，发送失败回退 `NEW`。`DONE` 只表示投递完成，不表示消息已消费或整个 Action 已成功。
+
+执行结果的事务一致性要求相关数据库仓储共用数据源和事务管理器，参见 [事务接入条件](docs/guides/starter-config.md#执行结果事务接入)。数据库回滚不会撤销下游副作用，Handler 仍需支持幂等重试。
 
 ## 最小使用模型
 
@@ -125,7 +128,7 @@ steps:
 
 每个 `stepType` 都由一个已注册的 `ActionStepHandler` 执行，可以来自框架模块，也可以来自业务模块。
 
-上例用于说明定义结构：`HTTP_CALL` 需要注册对应业务 Handler，短信步骤还需接入实际 Sender；仅声明 YAML 不会自动获得下游调用能力。可运行示例见 [action-guard-demo](./examples/action-guard-demo)。
+上例用于说明定义结构：`HTTP_CALL` 需要注册对应业务 Handler，短信步骤还需接入实际 Sender；仅声明 YAML 不会自动获得下游调用能力。可运行示例见 [action-guard-demo](examples/action-guard-demo)。
 
 ## 模块概览
 
@@ -154,27 +157,11 @@ steps:
 
 ## 从哪里开始看
 
-首次接入建议按这个顺序阅读：
+完整入口见 [文档导航](docs/README.md)，按接入使用、架构设计和版本维护分类。
 
-- [快速开始](./docs/quick-start.md)
-- [Starter 配置](./docs/starter-config.md)
-- [定义规范](./docs/definition-spec.md)
-- [架构设计](./docs/architecture.md)
-- [模块选择建议](./docs/module-selection.md)
-
-按主题深入阅读：
-
-- [模块架构](./docs/module-architecture.md)
-- [可观测性说明](./docs/observability.md)
-- [StepType 扩展指南](./docs/step-type-extension-guide.md)
-- [数据模型](./docs/data-model.md)
-- [治理操作](./docs/ops-governance.md)
-- [常见问题](./docs/faq.md)
-
-示例和模板：
-
-- [action-guard-demo](./examples/action-guard-demo)
-- [最小应用配置模板](./docs/templates/action-guard-minimal-application.yml)
+- 首次接入：[快速开始](docs/guides/quick-start.md) → [Starter 配置](docs/guides/starter-config.md)
+- 理解执行机制：[运行时架构](docs/reference/architecture.md)
+- 运行示例：[action-guard-demo](examples/action-guard-demo/README.md)
 
 ## 参与完善
 
@@ -184,7 +171,7 @@ steps:
 
 协作入口：
 
-- [项目协作约定 AGENTS.md](./AGENTS.md)：代理在本仓库工作的边界、实现约束和验证要求
-- [CONTRIBUTING.md](./CONTRIBUTING.md)
-- [SECURITY.md](./SECURITY.md)
-- [LICENSE](./LICENSE)
+- [项目协作约定 AGENTS.md](AGENTS.md)：代理在本仓库工作的边界、实现约束和验证要求
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [LICENSE](LICENSE)

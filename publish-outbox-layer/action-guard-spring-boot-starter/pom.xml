@@ -13,6 +13,11 @@
   <dependencies>
     <dependency>
       <groupId>io.github.actionguard</groupId>
+      <artifactId>action-guard-store-mysql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.actionguard</groupId>
       <artifactId>action-guard-api</artifactId>
     </dependency>
     <dependency>

@@ -9,6 +9,8 @@ import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.runtime.state.ActionTransitionResult;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.util.LinkedHashMap;
@@ -19,6 +21,7 @@ import java.time.Duration;
 
 public class ActionObservabilityService {
 
+    private static final System.Logger LOGGER = System.getLogger(ActionObservabilityService.class.getName());
     private final Optional<ActionAlertPublisher> actionAlertPublisher;
     private final Optional<ActionMetricsRecorder> actionMetricsRecorder;
     private final Clock clock;
@@ -232,7 +235,7 @@ public class ActionObservabilityService {
             Map<String, String> details
     ) {
         // 告警发布是可选能力，缺少 publisher 不应影响主链路执行，所以这里统一通过 Optional 降级。
-        actionAlertPublisher.ifPresent(publisher -> publisher.publish(new ActionAlertEvent(
+        ActionAlertEvent event = new ActionAlertEvent(
                 type,
                 level,
                 title,
@@ -243,7 +246,8 @@ public class ActionObservabilityService {
                 stepType,
                 clock.instant(),
                 Map.copyOf(details)
-        )));
+        );
+        afterCommitOrNow(() -> actionAlertPublisher.ifPresent(publisher -> publisher.publish(event)));
         increment("action.guard.alert.published", actionName, stepType);
     }
 
@@ -256,7 +260,26 @@ public class ActionObservabilityService {
 
     private void increment(String metricName, Map<String, String> tags) {
         // 指标同样允许缺省，以便框架在没有接入外部监控系统时仍能独立运行。
-        actionMetricsRecorder.ifPresent(recorder -> recorder.increment(metricName, tags));
+        afterCommitOrNow(() -> actionMetricsRecorder.ifPresent(recorder -> recorder.increment(metricName, tags)));
+    }
+
+    private void afterCommitOrNow(Runnable notification) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        notification.run();
+                    } catch (RuntimeException ex) {
+                        // 结果已经提交，监控通道故障不能阻断后续投递或伪装成执行失败。
+                        LOGGER.log(System.Logger.Level.WARNING, "事务提交后的告警或指标发送失败", ex);
+                    }
+                }
+            });
+        } else {
+            notification.run();
+        }
     }
 
     private String nullSafe(String value) {

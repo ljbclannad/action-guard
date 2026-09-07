@@ -1,4 +1,6 @@
-# 治理操作
+# 治理与可观测性
+
+文档入口：[文档导航](../README.md)。
 
 ## 目的
 
@@ -194,34 +196,152 @@
 - 补偿还额外受到 Action 级治理开关保护
 - 治理写冲突会显式暴露，而不是静默重试
 
-## 告警
+## 告警与指标
 
-告警应绑定在有业务与运维意义的状态变化上。
+### 告警能力
 
-第一版最少应覆盖的告警事件：
+当前标准告警事件统一使用 `ActionAlertEvent` 建模，核心字段包括：
 
-- Action 进入 `WAITING_MANUAL`
-- 重试耗尽
-- 补偿失败
-- dispatcher 积压超过阈值
-- Action 存活时长超过 SLA
-- 重复消费失败超过阈值
-- dead-letter 堆积超过阈值
+- `type`
+- `level`
+- `title`
+- `message`
+- `actionName`
+- `actionInstanceId`
+- `stepName`
+- `stepType`
+- `occurredAt`
+- `details`
 
-建议告警载荷：
+当前主路径已接入的告警类型包括：
 
-- action id
-- action name
-- biz key
-- 当前步骤
-- status
-- 最后错误码
-- 最近错误摘要
-- 如果有的话，附带 ops deep link
+- `RETRIES_EXHAUSTED`
+- `COMPENSATION_FAILED`
+- `CONSUME_FAILURE`
+- `DEAD_LETTER`
+- `OUTBOX_PUBLISH_FAILED`
+- `ACTION_STUCK`
 
-当前实现说明：
+如果引入 `action-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*`，这些事件会被直接投递到外部 webhook。
 
-- 当前还没有实现告警集成
+### 与事务的关系
+
+在 Spring 实际事务内产生的告警与指标延后到提交成功后发送，事务回滚时不发送，避免记录未提交的执行结果。提交后的监控通道异常会记录警告日志，不改变已提交状态，也不阻断后续 Outbox 投递。
+
+这类通知仍同步执行在提交回调中，不是持久化通知队列；进程退出可能导致通知丢失，外部监控实现应设置合理超时。无事务调用保留即时发送及原有异常传播行为。
+
+### 当前内建 metrics
+
+当前默认指标模型以 counter 为主，由 `ActionMetricsRecorder.increment(...)` 统一承载。
+
+starter 默认会注册内存版 recorder；如果你要接入 Micrometer、Prometheus 或公司内部平台，可以直接自定义 `ActionMetricsRecorder` Bean 覆盖默认实现。
+
+#### 1. 告警类计数
+
+- `action.guard.alert.published`
+- `action.guard.retry.exhausted`
+- `action.guard.compensation.failed`
+- `action.guard.consume.failed`
+- `action.guard.dead.letter`
+- `action.guard.outbox.publish.failed`
+- `action.guard.action.stuck`
+
+#### 2. 运行结果计数
+
+- `action.guard.step.succeeded`
+- `action.guard.step.failed`
+- `action.guard.step.timed_out`
+- `action.guard.action.succeeded`
+- `action.guard.action.failed`
+- `action.guard.action.compensated`
+
+#### 3. 治理操作计数
+
+- `action.guard.governance.command`
+
+用于统计 `RETRY / SKIP / CANCEL / COMPENSATE` 等治理命令的成功与失败次数。
+
+### 当前 tag 语义
+
+当前指标 tag 以低复杂度、可直接聚合为目标，主要包括：
+
+- `actionName`
+- `stepType`
+- `result`
+- `errorCode`
+- `command`
+
+并不是每个指标都会带所有 tag。
+
+例如：
+
+- `action.guard.step.succeeded` 带 `actionName + stepType + result`
+- `action.guard.action.failed` 带 `actionName + stepType + result + errorCode`
+- `action.guard.governance.command` 带 `command + result`
+
+### Micrometer / Prometheus 接入示例
+
+如果你的应用已经使用 Spring Boot Actuator + Micrometer，可以直接用一个适配 Bean 把框架计数接进去：
+
+```java
+import io.github.actionguard.api.spi.ActionMetricsRecorder;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.util.stream.Stream;
+import org.springframework.context.annotation.Bean;
+
+@Bean
+ActionMetricsRecorder actionMetricsRecorder(MeterRegistry registry) {
+    return (metricName, tags) -> Counter.builder(metricName)
+            .tags(tags.entrySet().stream()
+                    .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                    .toArray(String[]::new))
+            .register(registry)
+            .increment();
+}
+```
+
+最小依赖示例：
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+<dependency>
+  <groupId>io.micrometer</groupId>
+  <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+```
+
+最小配置示例：
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+```
+
+这样接入后，`action.guard.*` 计数会进入你的 Micrometer registry，并通过 `/actuator/prometheus` 暴露给 Prometheus 抓取。
+
+### 当前边界
+
+当前版本还没有内建：
+
+- 标准化 timer / histogram
+- Prometheus 指标暴露端点
+- 预制 Grafana dashboard
+- 多告警通道聚合编排
+
+因此更准确的定位是：
+
+- 框架已经提供主链路事件与计数语义
+- 监控平台接入与展示层由使用方按自身环境接管
 
 ## 审计要求
 

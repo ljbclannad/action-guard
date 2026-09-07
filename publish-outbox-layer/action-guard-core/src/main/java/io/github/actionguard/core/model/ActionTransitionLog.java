@@ -15,6 +15,19 @@ import java.util.UUID;
  *
  * <p>这样时间线展示、审计排查和离线分析就不需要再去反推多张表里的状态快照，而是可以直接读取
  * “哪条 action 在什么时间，因为哪个事件，从什么状态迁移到了什么状态” 这份事实记录。
+ *
+ * @param id 迁移日志唯一标识，工厂方法生成 UUID
+ * @param actionInstanceId 发生状态迁移的 Action 实例标识
+ * @param event 触发本次状态迁移的事件
+ * @param fromStatus 迁移前的 Action 状态
+ * @param toStatus 迁移后的 Action 状态
+ * @param stepIndex 关联步骤的零起始索引，无步骤上下文时可为 {@code null}
+ * @param stepName 关联步骤名称，无步骤上下文时可为 {@code null}
+ * @param stepType 关联步骤类型，无步骤上下文时可为 {@code null}
+ * @param operator 操作人标识，自动迁移等未提供操作人信息的场景可为 {@code null}
+ * @param errorCode 本次迁移关联的错误码，无错误信息时可为 {@code null}
+ * @param errorMessage 本次迁移关联的错误原因摘要，无错误信息时可为 {@code null}
+ * @param createdAt 本次迁移日志记录的时间，由调用方传入
  */
 public record ActionTransitionLog(
         String id,

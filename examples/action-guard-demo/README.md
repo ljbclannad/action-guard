@@ -7,7 +7,7 @@
 - H2 文件库，无需额外安装数据库
 - RabbitMQ 3.x，开启 AMQP 5672 端口
 
-默认值来自 [application.yml](/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/src/main/resources/application.yml:1)：
+默认值来自 [application.yml](src/main/resources/application.yml)：
 
 - H2 数据文件: `${user.home}/.action-guard/demo-db/action_guard_demo`
 - H2 用户名: `sa`
