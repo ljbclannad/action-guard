@@ -1,11 +1,10 @@
 package io.github.actionguard.core.runtime.recovery;
 
 import io.github.actionguard.core.model.ActionOutbox;
-import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.execution.ActionOutboxDispatcher;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
-import org.springframework.dao.OptimisticLockingFailureException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -27,7 +26,7 @@ public class ActionOutboxRecoveryService {
 
     private final ActionOutboxRepository actionOutboxRepository;
     private final Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer;
-    private final ActionObservabilityService actionObservabilityService;
+    private final ActionOutboxDispatcher outboxDispatcher;
     private final Clock clock;
 
     public ActionOutboxRecoveryService(
@@ -38,7 +37,7 @@ public class ActionOutboxRecoveryService {
     ) {
         this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
         this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
-        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+        this.outboxDispatcher = new ActionOutboxDispatcher(actionOutboxRepository, actionExecutionMessageProducer, actionObservabilityService, clock);
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -53,63 +52,10 @@ public class ActionOutboxRecoveryService {
         List<ActionOutbox> candidates = actionOutboxRepository.findRecoverable(now, now.minus(claimTimeout), batchSize);
         int recoveredCount = 0;
         for (ActionOutbox candidate : candidates) {
-            if (tryRecover(candidate)) {
+            if (outboxDispatcher.dispatch(candidate, 1)) {
                 recoveredCount++;
             }
         }
         return recoveredCount;
-    }
-
-    private boolean tryRecover(ActionOutbox candidate) {
-        ActionOutbox claimed;
-        try {
-            // recovery 和实时路径都通过 claim 来争抢同一条 outbox 的发送权，谁先成功谁负责继续发送。
-            claimed = actionOutboxRepository.save(new ActionOutbox(
-                    candidate.id(),
-                    candidate.actionInstanceId(),
-                    candidate.topic(),
-                    candidate.dispatchId(),
-                    ActionOutboxStatus.CLAIMED,
-                    candidate.availableAt(),
-                    candidate.attemptCount(),
-                    candidate.version(),
-                    candidate.createdAt(),
-                    clock.instant()
-            ));
-        } catch (OptimisticLockingFailureException ex) {
-            return false;
-        }
-        try {
-            actionExecutionMessageProducer.orElseThrow().publish(claimed);
-            actionOutboxRepository.save(new ActionOutbox(
-                    claimed.id(),
-                    claimed.actionInstanceId(),
-                    claimed.topic(),
-                    claimed.dispatchId(),
-                    ActionOutboxStatus.DONE,
-                    claimed.availableAt(),
-                    claimed.attemptCount(),
-                    claimed.version(),
-                    claimed.createdAt(),
-                    clock.instant()
-            ));
-            return true;
-        } catch (RuntimeException ex) {
-            // recover 失败后不要保留 CLAIMED 状态，否则这条 outbox 会长期卡住，后续节点也无法再接手。
-            ActionOutbox reset = actionOutboxRepository.save(new ActionOutbox(
-                    claimed.id(),
-                    claimed.actionInstanceId(),
-                    claimed.topic(),
-                    claimed.dispatchId(),
-                    ActionOutboxStatus.NEW,
-                    claimed.availableAt(),
-                    claimed.attemptCount(),
-                    claimed.version(),
-                    claimed.createdAt(),
-                    clock.instant()
-            ));
-            actionObservabilityService.outboxPublishFailed(reset, reset.attemptCount(), ex.getMessage());
-            return false;
-        }
     }
 }

@@ -117,7 +117,10 @@
 
 - 插入 `action_outbox` 必须与 `action_instance` 在同一事务中完成
 - 已被 claim 的记录在 lease 过期后应允许重新 claim
-- `DONE` 表示 dispatcher 侧的工作项已被可靠消费，不等于整个 Action 已经成功完成
+- `DONE` 表示消息生产者已返回发送成功且发布状态已落库，不表示消息已被消费，也不等于整个 Action 已经成功完成
+
+当前实现中，三条投递路径发送失败时均在原有 `attempt_count` 上加一，成功发送不增加该值。
+步骤级业务重试调度仍沿用现有逻辑加一，因此该字段是累计计数，不应直接当作纯 MQ 发送次数。
 
 ## action_consume_log
 

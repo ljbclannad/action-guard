@@ -4,7 +4,7 @@ import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.ActionPublication;
 import io.github.actionguard.api.ActionRequest;
 import io.github.actionguard.core.model.ActionOutbox;
-import io.github.actionguard.core.model.ActionOutboxStatus;
+import io.github.actionguard.core.runtime.execution.ActionOutboxDispatcher;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -35,7 +35,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
     private final ActionOutboxRepository actionOutboxRepository;
     private final Optional<ActionExecutionMessageProducer> actionExecutionMessageProducer;
     private final int publishRetryMaxAttempts;
-    private final ActionObservabilityService actionObservabilityService;
+    private final ActionOutboxDispatcher outboxDispatcher;
 
     public TransactionalActionPublisher(
             ActionPublisher delegate,
@@ -50,7 +50,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
         this.actionOutboxRepository = Objects.requireNonNull(actionOutboxRepository, "actionOutboxRepository must not be null");
         this.actionExecutionMessageProducer = Objects.requireNonNull(actionExecutionMessageProducer, "actionExecutionMessageProducer must not be null");
         this.publishRetryMaxAttempts = Math.max(1, publishRetryMaxAttempts);
-        this.actionObservabilityService = Objects.requireNonNull(actionObservabilityService, "actionObservabilityService must not be null");
+        this.outboxDispatcher = new ActionOutboxDispatcher(actionOutboxRepository, actionExecutionMessageProducer, actionObservabilityService, Clock.systemUTC());
     }
 
     public TransactionalActionPublisher(
@@ -66,7 +66,7 @@ public class TransactionalActionPublisher implements ActionPublisher {
                 actionOutboxRepository,
                 actionExecutionMessageProducer,
                 publishRetryMaxAttempts,
-                new ActionObservabilityService(Optional.empty(), Optional.empty(), java.time.Clock.systemUTC())
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), Clock.systemUTC())
         );
     }
 
@@ -98,37 +98,6 @@ public class TransactionalActionPublisher implements ActionPublisher {
     }
 
     private void publishAfterCommit(ActionOutbox outbox) {
-        ActionOutbox currentOutbox = outbox;
-        for (int attempt = 1; attempt <= publishRetryMaxAttempts; attempt++) {
-            try {
-                actionExecutionMessageProducer.orElseThrow().publish(currentOutbox);
-                markOutbox(currentOutbox, ActionOutboxStatus.DONE, currentOutbox.attemptCount());
-                return;
-            } catch (RuntimeException ex) {
-                // 这里的 retry 只覆盖“事务已提交后的 MQ 投递失败”窗口，用于缩短消息滞留在 outbox 的时间。
-                int nextAttemptCount = attempt;
-                currentOutbox = markOutbox(currentOutbox, ActionOutboxStatus.NEW, nextAttemptCount);
-                if (attempt >= publishRetryMaxAttempts) {
-                    actionObservabilityService.outboxPublishFailed(currentOutbox, nextAttemptCount, ex.getMessage());
-                }
-            }
-        }
-    }
-
-    private ActionOutbox markOutbox(ActionOutbox outbox, ActionOutboxStatus status, int attemptCount) {
-        // 发布后只更新 outbox，自身不再改 action / step，保持“执行状态”和“投递状态”两个维度解耦。
-        Instant now = Instant.now();
-        return actionOutboxRepository.save(new ActionOutbox(
-                outbox.id(),
-                outbox.actionInstanceId(),
-                outbox.topic(),
-                outbox.dispatchId(),
-                status,
-                outbox.availableAt(),
-                attemptCount,
-                outbox.version(),
-                outbox.createdAt(),
-                now
-        ));
+        outboxDispatcher.dispatch(outbox, publishRetryMaxAttempts);
     }
 }

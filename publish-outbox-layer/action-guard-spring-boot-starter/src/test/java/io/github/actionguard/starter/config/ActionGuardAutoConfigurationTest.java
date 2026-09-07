@@ -115,6 +115,7 @@ class ActionGuardAutoConfigurationTest {
 
                     assertThat(producer.published()).hasSize(1);
                     assertThat(producer.published().get(0).topic()).isEqualTo("ACTION_EXECUTE");
+                    assertThat(producer.published().get(0).status()).isEqualTo(ActionOutboxStatus.CLAIMED);
                     ActionOutbox persistedOutbox = context.getBean(ActionOutboxRepository.class)
                             .findByActionInstanceId(producer.published().get(0).actionInstanceId())
                             .orElseThrow();

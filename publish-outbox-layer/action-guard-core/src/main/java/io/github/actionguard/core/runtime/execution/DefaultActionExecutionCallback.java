@@ -58,6 +58,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private final ActionTransitionService actionTransitionService;
     private final ActionExecutionRuntimeService actionExecutionRuntimeService;
     private final Clock clock;
+    private final ActionOutboxDispatcher outboxDispatcher;
 
     public DefaultActionExecutionCallback(
             ActionInstanceRepository actionInstanceRepository,
@@ -139,6 +140,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
                 this.actionTransitionService
         );
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.outboxDispatcher = new ActionOutboxDispatcher(actionOutboxRepository, actionExecutionMessageProducer, actionObservabilityService, clock);
     }
 
     public DefaultActionExecutionCallback(
@@ -331,53 +333,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             return;
         }
         // 只有“立即可执行”的消息才在当前线程直接尝试投递；延迟重试交给 recovery/scheduler 再次扫描。
-        publishImmediately(scheduledOutbox);
-    }
-
-    private void publishImmediately(ActionOutbox outbox) {
-        // 先把 outbox claim 成 CLAIMED，再真正 publish，避免多个节点同时把同一条消息重复发到 MQ。
-        ActionOutbox claimedOutbox = actionOutboxRepository.save(new ActionOutbox(
-                outbox.id(),
-                outbox.actionInstanceId(),
-                outbox.topic(),
-                outbox.dispatchId(),
-                ActionOutboxStatus.CLAIMED,
-                outbox.availableAt(),
-                outbox.attemptCount(),
-                outbox.version(),
-                outbox.createdAt(),
-                clock.instant()
-        ));
-        try {
-            actionExecutionMessageProducer.orElseThrow().publish(claimedOutbox);
-            actionOutboxRepository.save(new ActionOutbox(
-                    claimedOutbox.id(),
-                    claimedOutbox.actionInstanceId(),
-                    claimedOutbox.topic(),
-                    claimedOutbox.dispatchId(),
-                    ActionOutboxStatus.DONE,
-                    claimedOutbox.availableAt(),
-                    claimedOutbox.attemptCount(),
-                    claimedOutbox.version(),
-                    claimedOutbox.createdAt(),
-                    clock.instant()
-            ));
-        } catch (RuntimeException ex) {
-            // 发送失败时把 outbox 还原回 NEW，交给后续恢复任务重试，而不是在这里静默丢失。
-            ActionOutbox reset = actionOutboxRepository.save(new ActionOutbox(
-                    claimedOutbox.id(),
-                    claimedOutbox.actionInstanceId(),
-                    claimedOutbox.topic(),
-                    claimedOutbox.dispatchId(),
-                    ActionOutboxStatus.NEW,
-                    claimedOutbox.availableAt(),
-                    claimedOutbox.attemptCount(),
-                    claimedOutbox.version(),
-                    claimedOutbox.createdAt(),
-                    clock.instant()
-            ));
-            actionObservabilityService.outboxPublishFailed(reset, reset.attemptCount(), ex.getMessage());
-        }
+        outboxDispatcher.dispatch(scheduledOutbox, 1);
     }
 
     private ActionStepDefinition resolveStepDefinition(ActionInstance actionInstance, ActionStepInstance currentStep) {
