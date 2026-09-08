@@ -2,31 +2,35 @@
 
 默认示例展示单步成功链路；[故障与治理演示](#故障与治理演示)通过独立的 `fault-demo` profile 展示自动重试和人工跳过。
 
-本应用在 `application.yml` 中显式配置 `action.guard.store.type=mysql`，使用 JDBC/MyBatis 仓储连接 H2 文件库；`fault-demo` 沿用该配置。这里的 `mysql` 选择仓储实现，具体连接的数据库由 `spring.datasource` 决定。切换真实 MySQL 仍需增加运行时驱动、修改连接配置并初始化数据库，不会自动迁移 H2 中的记录。
+本应用在 `application.yml` 中显式配置 `action.guard.store.type=mysql`，默认连接当前服务器的 MySQL 和 RabbitMQ；`fault-demo` 沿用该配置。MySQL 驱动由存储模块以运行时依赖提供。原 H2 数据不会自动迁移；需要 H2 时显式启用 `h2` profile。
 
 ## 运行前置条件
 
-这个 demo 依赖以下本地服务：
+这个 demo 默认依赖以下远程服务：
 
-- H2 文件库，无需额外安装数据库
-- RabbitMQ 3.x，开启 AMQP 5672 端口
+- MySQL 8.4，公网 TCP 3306 端口
+- RabbitMQ 4，公网 AMQP 5672 端口
 
 默认值来自 [application.yml](src/main/resources/application.yml)：
 
-- H2 数据文件: `${user.home}/.action-guard/demo-db/action_guard_demo`
-- H2 用户名: `sa`
-- H2 密码: 空
-- RabbitMQ: `localhost:5672`
-- RabbitMQ 用户名: `guest`
-- RabbitMQ 密码: `guest`
+- MySQL: `154.36.178.66:3306/action-guard`
+- MySQL 用户名: `action_guard`
+- RabbitMQ: `154.36.178.66:5672`
+- RabbitMQ 用户名: `action_guard`
+- RabbitMQ 虚拟主机: `action-guard`
+- 密码：环境变量 `MYSQL_PASSWORD`、`RABBITMQ_PASSWORD`，或被忽略的 `.local/action-guard.env`
 
-应用启动时会自动执行 `classpath:db/action-guard-mysql-schema.sql` 初始化表结构，并自动声明以下 RabbitMQ 拓扑：
+服务器已执行 `action-guard-mysql-schema.sql`，默认关闭应用侧重复初始化；新数据库需先执行该脚本。应用会自动声明以下 RabbitMQ 拓扑：
 
 - exchange: `action.guard.execute`
 - queue: `action.guard.execute.queue`
 - routing key prefix: `action.execute`
 
 ## 本地运行
+
+在仓库根目录运行。当前电脑已同步 `.local/action-guard.env`（权限 `600`），Spring 自动导入其中的密码；该目录已加入忽略规则，密码不会打包进 JAR。其他机器通过环境变量提供密码，或用 `ACTION_GUARD_LOCAL_CONFIG` 指定本地配置文件的绝对路径。IDE 的工作目录应设置为仓库根目录；Maven 启动已配置该工作目录。
+
+MySQL URL 使用 `sslMode=REQUIRED` 加密传输但不校验服务端证书身份；RabbitMQ 当前为未加密 AMQP，可用服务器安全组限制来源 IP。管理页面端口不是 AMQP 连接端口。
 
 先构建依赖模块：
 
@@ -69,7 +73,7 @@ bash scripts/run-demo-stability.sh
 - 先执行一次 `compile`
 - 然后并发启动多次 demo 实例
 - 每个实例都会分配独立 `SERVER_PORT`
-- 每个实例都会分配独立 `DEMO_H2_PATH`
+- 每个实例显式启用 `h2` profile，并分配独立 `DEMO_H2_PATH`；RabbitMQ 仍使用远程连接配置
 - 每个实例都会真实走一条 `publish -> RabbitMQ -> runtime -> SUCCESS` 链路
 - 最后在 `.tmp/action-guard-stability/<timestamp>/` 下输出分 run 日志，并汇总成功/失败数
 
@@ -90,9 +94,11 @@ ACTION_GUARD_STABILITY_LOG_DIR
 如果你的本地环境不是这组默认值，可以覆盖这些环境变量：
 
 ```bash
-DEMO_H2_PATH
-DEMO_H2_USERNAME
-DEMO_H2_PASSWORD
+MYSQL_URL
+MYSQL_USERNAME
+MYSQL_PASSWORD
+RABBITMQ_PASSWORD
+ACTION_GUARD_LOCAL_CONFIG
 DEMO_DB_POOL_MIN_IDLE
 DEMO_DB_POOL_MAX_SIZE
 DEMO_DB_POOL_IDLE_TIMEOUT_MS
@@ -103,7 +109,10 @@ DEMO_RABBITMQ_HOST
 DEMO_RABBITMQ_PORT
 DEMO_RABBITMQ_USERNAME
 DEMO_RABBITMQ_PASSWORD
+DEMO_RABBITMQ_VIRTUAL_HOST
 ```
+
+`DEMO_H2_PATH`、`DEMO_H2_USERNAME` 和 `DEMO_H2_PASSWORD` 仅在 `h2` profile 下使用。
 
 ## 预期输出
 
@@ -128,15 +137,15 @@ status=SUCCESS
 
 ## 排查提示
 
-- 如果启动卡在数据库连接，优先检查 `DEMO_H2_PATH` 是否可写，以及目标目录是否存在权限问题
+- 如果启动卡在数据库连接，优先检查服务器 3306 是否可达、密码是否加载、数据库名是否为 `action-guard`
 - 如果没有看到 `send sms to ...`，优先检查 RabbitMQ 是否可连、exchange / queue 是否成功声明
-- 如果表结构初始化失败，优先检查 H2 是否被其他异常进程占用同一数据文件
+- 如果提示表不存在，确认连接到正确数据库并已执行初始化脚本；`h2` profile 下另需检查文件目录权限和占用情况
 
 ## 故障与治理演示
 
 ### 启动
 
-先按前文构建依赖、准备本地 RabbitMQ，再启动：
+先按前文构建依赖、准备远程连接密码，再启动：
 
 ```bash
 mvn -f examples/action-guard-demo/pom.xml spring-boot:run \

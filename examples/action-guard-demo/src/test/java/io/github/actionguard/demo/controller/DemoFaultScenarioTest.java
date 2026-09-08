@@ -30,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** 使用真实 H2 仓储及执行、治理链路，消息传输由测试显式驱动。 */
 @SpringBootTest(classes = ActionGuardDemoApplication.class, properties = {
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.sql.init.mode=always",
         "spring.datasource.url=jdbc:h2:mem:demo_fault_test;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.rabbitmq.listener.simple.auto-startup=false",

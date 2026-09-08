@@ -45,7 +45,7 @@ run_one() {
     cd "$ROOT_DIR"
     DEMO_H2_PATH="$run_db_path" \
     SERVER_PORT="$run_port" \
-    mvn -q -f "$DEMO_POM" spring-boot:run >"$log_file" 2>&1
+    mvn -q -f "$DEMO_POM" spring-boot:run -Dspring-boot.run.profiles=h2 >"$log_file" 2>&1
   )
 }
 

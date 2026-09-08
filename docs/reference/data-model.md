@@ -4,6 +4,23 @@
 
 阅读边界：本文包含模型建议和建议字段，实际表名、列与索引以 [当前 Schema](../../publish-outbox-layer/action-guard-store-mysql/src/main/resources/db/action-guard-mysql-schema.sql) 为准，本文不作为数据库迁移脚本。
 
+## 初始化脚本与旧库升级
+
+- 当前 Schema 用于初始化：索引与表一同定义在 `CREATE TABLE IF NOT EXISTS` 中，重复执行不会重复创建索引，也不清空已有数据。
+- 新建的 `action_step_instance` 通过唯一索引 `uk_action_step_instance_action_step (action_instance_id, step_index)` 保证同一 Action 的一个步骤位置只有一条记录；不同 Action 可使用相同索引值。
+- 脚本为全部表和字段提供中文 `COMMENT`。现有字段类型、默认值和其他索引保持不变，本次不增加扫描性能索引。
+- **重复执行不等于升级旧表**：已有表不会自动获得新的唯一约束、字段或注释。旧库仍保留原有普通步骤索引，需单独评估迁移，不能仅凭初始化脚本执行成功判断结构已更新。
+- 旧库升级步骤唯一约束前，先只读检查重复记录；若发现重复，确认业务数据处理方案后再迁移，不自动删除数据：
+
+  ```sql
+  select action_instance_id, step_index, count(*) as duplicate_count
+  from action_step_instance
+  group by action_instance_id, step_index
+  having count(*) > 1;
+  ```
+
+- `MysqlSchemaInitializationTest` 使用 H2 的 MySQL 模式执行实际脚本，验证重复初始化保留数据、步骤唯一约束和表字段注释覆盖；该验证不替代真实 MySQL 初始化、注释元数据和旧库迁移验证。
+
 ## 目标
 
 数据模型必须让框架具备可恢复、可治理和集群安全的能力。

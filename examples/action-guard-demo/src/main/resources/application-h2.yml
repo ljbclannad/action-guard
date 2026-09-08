@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:file:${DEMO_H2_PATH:${user.home}/.action-guard/demo-db/action_guard_demo};MODE=MySQL;AUTO_SERVER=TRUE
+    username: ${DEMO_H2_USERNAME:sa}
+    password: ${DEMO_H2_PASSWORD:}
+  sql:
+    init:
+      mode: always

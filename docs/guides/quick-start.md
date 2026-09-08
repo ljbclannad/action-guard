@@ -25,7 +25,7 @@
 | 状态查询与人工处理 | `action-guard-ops-api`；独立入口由 `action-guard-ops-web` 提供 |
 | 外部告警 | `action-guard-alert-webhook` |
 
-默认以 H2 文件库加 RabbitMQ 演示，真实数据库接入再配置并验证 MySQL。Kafka、Redis 当前不作为推荐主路径，选型时先核对实际实现。引入能力模块并不等于已经接入真实厂商服务。
+默认以当前服务器的 MySQL 加 RabbitMQ 演示，连接和密码配置见 [demo 说明](../../examples/action-guard-demo/README.md)。Kafka、Redis 当前不作为推荐主路径，选型时先核对实际实现。引入能力模块并不等于已经接入真实厂商服务。
 
 最小可运行组合建议：
 
@@ -53,12 +53,13 @@
 当前最小主链路需要：
 
 - H2 文件库或 MySQL
-- RabbitMQ 3.x
+- RabbitMQ，当前服务器使用 4.x
 
-开源演示默认建议：
+当前演示默认配置：
 
-- 先使用 H2 文件库跑通主链路
-- 等接入稳定后再切换到 MySQL
+- MySQL：`154.36.178.66:3306`，数据库 `action-guard`
+- RabbitMQ：`154.36.178.66:5672`，虚拟主机 `action-guard`
+- 两个服务均使用 `action_guard` 用户，密码通过环境变量或本地私密配置加载
 
 应用侧至少要准备：
 
@@ -77,7 +78,7 @@ action:
       type: mysql
 ```
 
-该值选择 JDBC/MyBatis 仓储，H2 演示同样适用。真实 MySQL 还需在应用中引入运行时 `mysql-connector-j`，配置 `com.mysql.cj.jdbc.Driver` 和 MySQL 连接信息。纯内存测试可配置 `memory`，不具备持久化保证。
+该值选择 JDBC/MyBatis 仓储，H2 测试同样适用。存储模块已提供运行时 `mysql-connector-j`，默认配置 `com.mysql.cj.jdbc.Driver` 和当前服务器连接信息。纯内存测试可配置 `memory`，不具备持久化保证。
 
 可以直接从模板复制：
 
@@ -153,7 +154,7 @@ actionPublisher.publish(new ActionRequest(
 
 ## 常见问题
 
-- **为什么存储模块仍叫 MySQL？** 当前通过 JDBC / MyBatis 持久化，本地演示使用 H2 的 MySQL 兼容模式；H2 测试通过不代表真实 MySQL 已验证。
+- **为什么测试中还有 H2？** 当前通过 JDBC / MyBatis 持久化，单元测试及隔离验证使用 H2 的 MySQL 兼容模式；H2 测试通过不代表真实 MySQL 已验证。
 - **`stepType` 与 `target` 怎么区分？** 前者是能力类型，后者是 provider 或业务路由目标；内置通知类型为 `NOTIFY_IN_APP_SEND`、`NOTIFY_SMS_SEND`、`NOTIFY_EMAIL_SEND`，IM 类型为 `IM_GROUP_CREATE`、`IM_GROUP_INVITE`、`IM_GROUP_MESSAGE_SEND`。
 - **是否支持并行？** 当前只支持串行步骤。业务本地动作可直接实现 Handler，无需先建通用能力模块。
 - **是否支持补偿？** 已有 Action 级开关、成功步骤逆序补偿与日志；具体入口、失败状态和边界见治理文档。

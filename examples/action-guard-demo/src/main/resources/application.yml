@@ -1,13 +1,15 @@
 spring:
+  config:
+    import: optional:file:${ACTION_GUARD_LOCAL_CONFIG:./.local/action-guard.env}[.properties]
   jackson:
     deserialization:
       fail-on-unknown-properties: false
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:file:${DEMO_H2_PATH:${user.home}/.action-guard/demo-db/action_guard_demo};MODE=MySQL;AUTO_SERVER=TRUE
-    username: ${DEMO_H2_USERNAME:sa}
-    password: ${DEMO_H2_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://154.36.178.66:3306/action-guard?sslMode=REQUIRED&characterEncoding=UTF-8&connectionTimeZone=UTC}
+    username: ${MYSQL_USERNAME:action_guard}
+    password: ${MYSQL_PASSWORD:}
     hikari:
       pool-name: action-guard-demo-hikari
       minimum-idle: ${DEMO_DB_POOL_MIN_IDLE:2}
@@ -19,14 +21,15 @@ spring:
       auto-commit: true
   sql:
     init:
-      mode: always
-      continue-on-error: true
+      mode: never
+      continue-on-error: false
       schema-locations: classpath:db/action-guard-mysql-schema.sql
   rabbitmq:
-    host: ${DEMO_RABBITMQ_HOST:localhost}
+    host: ${DEMO_RABBITMQ_HOST:154.36.178.66}
     port: ${DEMO_RABBITMQ_PORT:5672}
-    username: ${DEMO_RABBITMQ_USERNAME:guest}
-    password: ${DEMO_RABBITMQ_PASSWORD:guest}
+    username: ${DEMO_RABBITMQ_USERNAME:action_guard}
+    password: ${DEMO_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:}}
+    virtual-host: ${DEMO_RABBITMQ_VIRTUAL_HOST:action-guard}
 
 action:
   guard:

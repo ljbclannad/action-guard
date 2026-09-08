@@ -8,7 +8,7 @@ LOG_FILE="$LOG_DIR/demo-smoke.log"
 
 mkdir -p "$LOG_DIR"
 
-echo "demo smoke mode: H2 file + RabbitMQ"
+echo "演示冒烟模式：远程 MySQL + RabbitMQ"
 echo "log file: $LOG_FILE"
 
 cd "$ROOT_DIR"

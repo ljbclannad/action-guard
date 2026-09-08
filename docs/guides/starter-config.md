@@ -28,7 +28,7 @@ action:
 
 模块依赖决定哪些实现可用，配置决定启用哪套实现。`memory` 不会禁用接入应用自身的数据源自动配置；即使数据源存在，框架也不会因此自动选择数据库仓储。现有自定义 Bean 覆盖机制保留，手工覆盖仓储时仍需自行保证整组实现和事务的一致性。
 
-`mysql` 表示当前 JDBC/MyBatis 存储实现，不是对 JDBC URL 的数据库类型校验。现有 H2 演示同样配置 `mysql`；切换真实 MySQL 时保留该值，增加运行时 `com.mysql:mysql-connector-j` 依赖，并修改 `spring.datasource` 的驱动、URL 和账号。
+`mysql` 表示当前 JDBC/MyBatis 存储实现，不是对 JDBC URL 的数据库类型校验。默认演示已连接远程 MySQL，存储模块提供运行时 `com.mysql:mysql-connector-j`；H2 测试和显式 `h2` profile 同样配置 `mysql`。连接地址、账号和本地密码加载方式见 [demo 说明](../../examples/action-guard-demo/README.md)。
 
 治理查询和审计接口仍依赖 JDBC 数据库，不随 `memory` 自动变成内存版；带治理接口的 demo 应继续使用 `mysql`。
 

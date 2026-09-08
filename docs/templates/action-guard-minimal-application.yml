@@ -1,19 +1,22 @@
 spring:
+  config:
+    import: optional:file:${ACTION_GUARD_LOCAL_CONFIG:./.local/action-guard.env}[.properties]
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:file:./.data/action_guard_demo;MODE=MySQL;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://154.36.178.66:3306/action-guard?sslMode=REQUIRED&characterEncoding=UTF-8&connectionTimeZone=UTC}
+    username: ${MYSQL_USERNAME:action_guard}
+    password: ${MYSQL_PASSWORD:}
   sql:
     init:
-      mode: always
-      continue-on-error: true
+      mode: never
+      continue-on-error: false
       schema-locations: classpath:db/action-guard-mysql-schema.sql
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${DEMO_RABBITMQ_HOST:154.36.178.66}
+    port: ${DEMO_RABBITMQ_PORT:5672}
+    username: ${DEMO_RABBITMQ_USERNAME:action_guard}
+    password: ${DEMO_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:}}
+    virtual-host: ${DEMO_RABBITMQ_VIRTUAL_HOST:action-guard}
 
 action:
   guard:
@@ -37,8 +40,7 @@ action:
       queue: action.guard.execute.queue
       consumer-group: action-guard-app
 
-# 切换真实 MySQL 时保留 store.type=mysql，补充运行时 mysql-connector-j 依赖，
-# 并将 datasource 驱动改为 com.mysql.cj.jdbc.Driver，配置 MySQL JDBC URL 和账号密码。
+# 当前服务器已初始化表结构；新数据库应先执行初始化 SQL。
 #
 # 如果你接入了 webhook 告警模块，可按需打开：
 # action:

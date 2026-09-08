@@ -25,6 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "demo.runner.enabled=false",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.sql.init.mode=always",
         "spring.datasource.url=jdbc:h2:mem:demo_publish_test;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.username=sa",
         "spring.datasource.password=",

@@ -1,12 +1,14 @@
 spring:
+  config:
+    import: optional:file:${ACTION_GUARD_LOCAL_CONFIG:./.local/action-guard.env}[.properties]
   datasource:
-    username: sa
-    password:
-    url: jdbc:h2:file:${ACTION_GUARD_H2_PATH:${user.home}/.action-guard/action-guard-db/action_guard};MODE=MySQL;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
+    username: ${MYSQL_USERNAME:action_guard}
+    password: ${MYSQL_PASSWORD:}
+    url: ${MYSQL_URL:jdbc:mysql://154.36.178.66:3306/action-guard?sslMode=REQUIRED&characterEncoding=UTF-8&connectionTimeZone=UTC}
+    driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
-      pool-name: action-guard-h2
+      pool-name: action-guard-mysql
       minimum-idle: 2
       maximum-pool-size: 10
       connection-timeout: 30000
