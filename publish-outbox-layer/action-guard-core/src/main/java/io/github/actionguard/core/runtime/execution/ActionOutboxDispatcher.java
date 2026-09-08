@@ -32,33 +32,40 @@ public class ActionOutboxDispatcher {
 
     /** CLAIMED 候选只能由恢复扫描在确认租约超时后传入。 */
     public boolean dispatch(ActionOutbox candidate, int maxAttempts) {
+        // 仅处理已到期、可投递的 NEW 记录，或由恢复扫描接管的超时 CLAIMED 记录。
         if (producer.isEmpty() || (candidate.status() != ActionOutboxStatus.NEW
                 && candidate.status() != ActionOutboxStatus.CLAIMED)
                 || candidate.availableAt().isAfter(clock.instant()) || maxAttempts <= 0) {
             return false;
         }
+        // 每次失败回退后使用最新持久化快照继续尝试，避免沿用已过期的 version。
         ActionOutbox current = candidate;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             ActionOutbox claimed;
             try {
+                // 先以乐观锁抢占为 CLAIMED；抢占失败说明其他执行者已更新，当前执行者直接退出。
                 claimed = save(current, ActionOutboxStatus.CLAIMED, current.attemptCount());
             } catch (OptimisticLockingFailureException ex) {
                 return false;
             }
             try {
+                // 只有抢占成功的快照才允许发送，避免多个节点同时投递同一条 Outbox。
                 producer.orElseThrow().publish(claimed);
             } catch (RuntimeException ex) {
                 try {
+                    // 发送结果未成功确认时回退 NEW，并累计投递失败次数，供当前调用或后续恢复扫描重试。
                     current = save(claimed, ActionOutboxStatus.NEW, claimed.attemptCount() + 1);
                 } catch (OptimisticLockingFailureException conflict) {
                     return false;
                 }
                 if (attempt == maxAttempts) {
+                    // 仅在本次调用耗尽重试次数后记录观测事件；记录本身不改变 Outbox 状态。
                     observability.outboxPublishFailed(current, current.attemptCount(), ex.getMessage());
                 }
                 continue;
             }
-            // 发送成功后的落库冲突表示状态已被其他执行者推进，不能再回退或立即重发。
+            // Broker 已确认发送后再落库为 DONE；这里仍存在 MQ 与数据库非原子窗口。
+            // 落库冲突表示状态已被其他执行者推进，不能再回退或立即重发。
             try {
                 save(claimed, ActionOutboxStatus.DONE, claimed.attemptCount());
                 return true;

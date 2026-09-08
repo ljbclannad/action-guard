@@ -63,6 +63,10 @@ public class RabbitMqActionExecutionMessageProducer implements ActionExecutionMe
         returnedMessages.remove(executionMessage.messageId());
         rabbitTemplate.invoke(operations -> {
             operations.send(properties.getExchange(), routingKey(executionMessage), toAmqpMessage(executionMessage));
+            // invoke 提供专用 publisher channel；这里同步等待该 channel 上此前待确认发布的 ack/nack。
+            // 超时或收到 nack 时返回 false，抛出异常使上层保留 Outbox 的可恢复投递语义。
+            // Confirm 仅表示 Broker 已确认接收发布；mandatory 的 returned callback 在下方检查路由失败，
+            // 不代表消息已被消费者接收，也不代表 Handler 已执行完成。
             if (!operations.waitForConfirms(properties.getConfirmTimeout().toMillis())) {
                 throw new IllegalStateException("RabbitMQ did not confirm action execution message");
             }
