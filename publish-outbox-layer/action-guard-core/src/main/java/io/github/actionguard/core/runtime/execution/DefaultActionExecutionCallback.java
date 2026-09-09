@@ -38,15 +38,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Action 执行回调的核心协调实现。
+ * Action 执行回调的运行时协调器。
  *
- * <p>它处在 {@code consumer -> callback -> handler} 这段链路的中心位置：MQ consumer 拿到并完成基础校验后，
- * 会把 {@code ActionExecutionMessage} 交给这里；这里再根据当前 action / step 状态定位可执行步骤，
- * 查找对应的 {@link ActionStepHandler}，并真正触发业务 handler 执行。
+ * <p>它位于 {@code consumer -> callback -> handler} 链路：根据 {@link ActionExecutionMessage} 定位当前
+ * Action 和 Step，调用对应的 {@link ActionStepHandler}，再根据执行结果推进状态机、记录迁移日志，并在需要时
+ * 调度后续 Outbox。
  *
- * <p>handler 返回结果后，这个类继续负责推进 action 状态机，决定下一步是成功推进、立即重试、
- * 延迟重试还是失败终止，并在需要时复用 outbox 再次投递执行消息。所以它既是 step handler 的调用入口，
- * 也是整条执行链路的状态编排器。
+ * <p>事务边界分为两段：Handler 在 {@code NOT_SUPPORTED} 范围执行，不占用结果事务；Handler 返回后，
+ * Step、Action、迁移日志和后续 Outbox 在短 {@code REQUIRES_NEW} 事务内一起写入。该事务提交并释放资源后，
+ * 才通过 {@link ActionOutboxDispatcher} 投递 Outbox。数据库事务无法撤销已发生的外部 Handler 副作用，
+ * Handler 仍必须保证幂等。
  */
 public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
@@ -206,6 +207,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
 
     @Override
     public void execute(ActionExecutionMessage message) {
+        // 挂起调用方已有事务后再读取并执行 Handler，避免外部调用长时间占用结果事务的数据库连接。
         outsideTransactions.executeWithoutResult(status -> executeOutsideTransaction(message));
     }
 
@@ -247,12 +249,14 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
             result = StepExecutionResult.failed("STEP_EXECUTION_EXCEPTION", normalizedThrowableMessage(ex));
         }
         Instant completedAt = clock.instant();
+        // 超时在 Handler 返回后按耗时判定，不会主动中断正在执行的外部调用。
         StepExecutionResult effectiveResult = applyTimeoutIfExceeded(result, stepDefinition, startedAt, completedAt);
 
+        // 结果事务内统一写入 Step、Action、迁移日志和待投递 Outbox；任一写入失败则不产生下一步投递。
         ActionOutbox scheduledOutbox = resultTransactions.execute(status -> effectiveResult.success()
                 ? handleStepSuccess(actionInstance, currentStep)
                 : handleStepFailure(actionInstance, currentStep, stepDefinition, effectiveResult));
-        // execute 返回时结果事务已提交并释放连接，后续发送不占用结果事务。
+        // 返回时结果事务已提交并释放连接；投递失败不会回滚已提交结果，Outbox 可由恢复任务继续处理。
         if (scheduledOutbox != null) {
             outboxDispatcher.dispatch(scheduledOutbox, 1);
         }
@@ -306,7 +310,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
         }
         actionObservabilityService.stepFailed(actionInstance, failedStep, result.errorCode());
         if (retryAction == ActionRetryAction.IMMEDIATE_RETRY || retryAction == ActionRetryAction.DELAY_RETRY) {
-            // retry 不会创建新的 action，而是把同一个 action 重新置为 RETRYING，并复用原 outbox 重新调度。
+            // 重试不创建新的 Action：同一 Outbox 记录重新调度，但会生成新的 dispatchId 代表新的逻辑投递。
             ActionTransitionExecution retryTransition = actionExecutionRuntimeService.transitionFailure(
                     actionInstance,
                     failedStep,
@@ -351,7 +355,7 @@ public class DefaultActionExecutionCallback implements ActionExecutionCallback {
     private ActionOutbox scheduleOutbox(String actionInstanceId, Instant availableAt, boolean incrementAttemptCount) {
         ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
                 .orElseThrow(() -> new IllegalStateException("Outbox not found for actionInstanceId: " + actionInstanceId));
-        // 下一步和业务重试是新的逻辑任务，必须生成新的消息标识。
+        // 下一步推进和业务重试是新的逻辑投递，必须生成新的 dispatchId；传输失败后的重发由 dispatcher 保留原值。
         return actionOutboxRepository.save(new ActionOutbox(
                 outbox.id(),
                 outbox.actionInstanceId(),
