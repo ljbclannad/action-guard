@@ -75,6 +75,12 @@ public class RabbitMqActionExecutionConsumer {
         );
     }
 
+    /**
+     * 使用手动确认：先落消费日志，再按处理结果显式 ACK、NACK 或 Reject RabbitMQ 投递。
+     *
+     * <p>消费日志与 RabbitMQ 确认不是原子操作；日志已落库但确认前进程异常时，Broker 仍可能重复投递。
+     * 重复投递由消费日志抢占和跳过逻辑兜底，不能将此链路视为恰好一次消费。
+     */
     @RabbitListener(queues = "${action.guard.rabbitmq.queue:action.guard.execute.queue}", ackMode = "MANUAL")
     public void consume(Message message, Channel channel) throws IOException {
         ActionExecutionMessage executionMessage;
