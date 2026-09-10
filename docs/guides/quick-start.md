@@ -30,18 +30,25 @@
 最小可运行组合建议：
 
 ```xml
+<properties>
+  <action-guard.version>0.1.0</action-guard.version>
+</properties>
+
 <dependencies>
   <dependency>
-    <groupId>io.github.actionguard</groupId>
+    <groupId>io.github.ljbclannad.actionguard</groupId>
     <artifactId>action-guard-spring-boot-starter</artifactId>
+    <version>${action-guard.version}</version>
   </dependency>
   <dependency>
-    <groupId>io.github.actionguard</groupId>
+    <groupId>io.github.ljbclannad.actionguard</groupId>
     <artifactId>action-guard-adapter-rabbitmq</artifactId>
+    <version>${action-guard.version}</version>
   </dependency>
   <dependency>
-    <groupId>io.github.actionguard</groupId>
+    <groupId>io.github.ljbclannad.actionguard</groupId>
     <artifactId>action-guard-store-mysql</artifactId>
+    <version>${action-guard.version}</version>
   </dependency>
 </dependencies>
 ```
@@ -55,11 +62,7 @@
 - H2 文件库或 MySQL
 - RabbitMQ，当前服务器使用 4.x
 
-当前演示默认配置：
-
-- MySQL：`154.36.178.66:3306`，数据库 `action-guard`
-- RabbitMQ：`154.36.178.66:5672`，虚拟主机 `action-guard`
-- 两个服务均使用 `action_guard` 用户，密码通过环境变量或本地私密配置加载
+演示的远程连接地址、账号和密码只从本地私密配置或环境变量读取，不随仓库发布。参考 [最小配置模板](../templates/action-guard-minimal-application.yml) 配置 `MYSQL_*` 与 `DEMO_RABBITMQ_*`。
 
 应用侧至少要准备：
 

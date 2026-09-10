@@ -518,11 +518,12 @@ class DefaultActionExecutionCallbackTest {
         callback.execute(new ActionExecutionMessage("ACTION_EXECUTE:outbox-1", "ACTION_EXECUTE:act-1", "outbox-1", "act-1", "ACTION_EXECUTE", Instant.parse("2026-06-26T09:00:00Z")));
 
         assertThat(actionOutboxRepository.findByActionInstanceId("act-1").orElseThrow().status()).isEqualTo(ActionOutboxStatus.NEW);
+        Clock recoveryClock = Clock.fixed(Instant.parse("2026-06-26T09:01:05Z"), ZoneOffset.UTC);
         ActionOutboxRecoveryService recoveryService = new ActionOutboxRecoveryService(
                 actionOutboxRepository,
                 Optional.of(producer),
-                new ActionObservabilityService(Optional.empty(), Optional.empty(), clock),
-                clock
+                new ActionObservabilityService(Optional.empty(), Optional.empty(), recoveryClock),
+                recoveryClock
         );
 
         int recovered = recoveryService.recoverDueOutboxes(10, java.time.Duration.ofSeconds(30));

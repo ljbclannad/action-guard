@@ -166,6 +166,42 @@ class ActionCommandServiceTest {
     }
 
     @Test
+    void shouldRequeueDeadOutboxForNonTerminalAction() {
+        InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
+        InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
+        InMemoryActionStepInstanceRepository actionStepInstanceRepository = new InMemoryActionStepInstanceRepository();
+        ActionAuditLogRepository auditLogRepository = InMemoryAuditLogRepository.create();
+        CapturingProducer producer = new CapturingProducer();
+        Instant now = Instant.parse("2026-06-26T12:00:00Z");
+        actionInstanceRepository.save(new ActionInstance(
+                "act-1", "order-cancel-flow", "order:1", ActionStatus.NEW, 0, 1, Map.of(),
+                null, null, 0, now, now
+        ));
+        actionOutboxRepository.save(new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", "dispatch-1", ActionOutboxStatus.DEAD, now,
+                4, 10, 0, now, now
+        ));
+
+        ActionCommandService service = new ActionCommandService(
+                actionInstanceRepository,
+                actionOutboxRepository,
+                actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.of(producer),
+                new NoOpCompensationService()
+        );
+
+        service.retry("act-1", "operator-1");
+
+        ActionOutbox requeued = actionOutboxRepository.findByActionInstanceId("act-1").orElseThrow();
+        assertThat(requeued.status()).isEqualTo(ActionOutboxStatus.DONE);
+        assertThat(requeued.dispatchId()).isNotEqualTo("dispatch-1");
+        assertThat(requeued.deliveryAttemptCount()).isZero();
+        assertThat(producer.published()).hasSize(1);
+    }
+
+    @Test
     void shouldPublishRetryAfterTransactionCommit() {
         InMemoryActionInstanceRepository actionInstanceRepository = new InMemoryActionInstanceRepository();
         InMemoryActionOutboxRepository actionOutboxRepository = new InMemoryActionOutboxRepository();
@@ -305,7 +341,7 @@ class ActionCommandServiceTest {
         assertThat(updated.status()).isEqualTo(ActionStatus.DISPATCHING);
         assertThat(updated.currentStepIndex()).isEqualTo(1);
         assertThat(actionStepInstanceRepository.findByActionInstanceId("act-1").get(0).status()).isEqualTo(ActionStepStatus.SUCCESS);
-        assertThat(updatedOutbox.status()).isEqualTo(ActionOutboxStatus.NEW);
+        assertThat(updatedOutbox.status()).isEqualTo(ActionOutboxStatus.DONE);
         assertThat(producer.published()).hasSize(1);
         assertThat(producer.published().get(0).id()).isEqualTo("outbox-1");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);

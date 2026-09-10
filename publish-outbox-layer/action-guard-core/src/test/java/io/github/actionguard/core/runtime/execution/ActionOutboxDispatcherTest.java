@@ -58,6 +58,7 @@ class ActionOutboxDispatcherTest {
         ActionOutbox persisted = repository.findById(candidate.id()).orElseThrow();
         assertThat(persisted.status()).isEqualTo(ActionOutboxStatus.DONE);
         assertThat(persisted.attemptCount()).isEqualTo(3);
+        assertThat(persisted.deliveryAttemptCount()).isEqualTo(1);
         assertThat(sent.get()).isEqualTo(2);
         assertThat(alerts).isEmpty();
     }
@@ -75,8 +76,35 @@ class ActionOutboxDispatcherTest {
         ActionOutbox persisted = repository.findById(candidate.id()).orElseThrow();
         assertThat(persisted.status()).isEqualTo(ActionOutboxStatus.NEW);
         assertThat(persisted.attemptCount()).isEqualTo(4);
+        assertThat(persisted.deliveryAttemptCount()).isEqualTo(2);
+        assertThat(persisted.availableAt()).isEqualTo(now.plusSeconds(5));
         assertThat(sent.get()).isEqualTo(2);
         assertThat(alerts).hasSize(1);
+    }
+
+    @Test
+    void shouldMarkOutboxDeadWhenDeliveryFailureLimitIsReached() {
+        ActionOutbox candidate = candidate(now);
+        ActionOutboxDispatcher dispatcher = new ActionOutboxDispatcher(
+                repository,
+                Optional.of(outbox -> {
+                    throw new IllegalStateException("发送失败");
+                }),
+                observability,
+                clock,
+                2,
+                java.time.Duration.ZERO
+        );
+
+        assertThat(dispatcher.dispatch(candidate, 1)).isFalse();
+        ActionOutbox retryCandidate = repository.findById(candidate.id()).orElseThrow();
+        assertThat(retryCandidate.status()).isEqualTo(ActionOutboxStatus.NEW);
+        assertThat(retryCandidate.deliveryAttemptCount()).isEqualTo(1);
+
+        assertThat(dispatcher.dispatch(retryCandidate, 1)).isFalse();
+        ActionOutbox persisted = repository.findById(candidate.id()).orElseThrow();
+        assertThat(persisted.status()).isEqualTo(ActionOutboxStatus.DEAD);
+        assertThat(persisted.deliveryAttemptCount()).isEqualTo(2);
     }
 
     @Test

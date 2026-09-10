@@ -47,6 +47,7 @@ create table if not exists action_outbox (
     status varchar(32) not null comment '发布状态：NEW、CLAIMED、DONE 或 DEAD；DONE 不代表消费完成',
     available_at timestamp not null comment '任务可调度时间，用于延迟重试和恢复扫描',
     attempt_count int not null comment '当前投递失败回退和业务重试调度均递增的累计计数，不是纯 MQ 失败次数',
+    delivery_attempt_count int not null default 0 comment '仅消息发送失败次数，达到上限后 Outbox 进入 DEAD',
     version int not null default 0 comment '持久化乐观锁版本，用于投递抢占与并发检测',
     created_at timestamp not null comment '记录创建时间，后续调度保留',
     updated_at timestamp not null comment '最近更新时间，用于判断抢占是否超时',

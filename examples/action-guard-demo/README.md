@@ -11,14 +11,7 @@
 - MySQL 8.4，公网 TCP 3306 端口
 - RabbitMQ 4，公网 AMQP 5672 端口
 
-默认值来自 [application.yml](src/main/resources/application.yml)：
-
-- MySQL: `154.36.178.66:3306/action-guard`
-- MySQL 用户名: `action_guard`
-- RabbitMQ: `154.36.178.66:5672`
-- RabbitMQ 用户名: `action_guard`
-- RabbitMQ 虚拟主机: `action-guard`
-- 密码：环境变量 `MYSQL_PASSWORD`、`RABBITMQ_PASSWORD`，或被忽略的 `.local/action-guard.env`
+连接信息不写入仓库。默认 profile 从被忽略的 `.local/action-guard.env` 或环境变量读取 `MYSQL_URL`、`MYSQL_USERNAME`、`MYSQL_PASSWORD`、`DEMO_RABBITMQ_HOST`、`DEMO_RABBITMQ_PORT`、`DEMO_RABBITMQ_USERNAME`、`DEMO_RABBITMQ_PASSWORD` 和 `DEMO_RABBITMQ_VIRTUAL_HOST`。
 
 服务器已执行 `action-guard-mysql-schema.sql`，默认关闭应用侧重复初始化；新数据库需先执行该脚本。应用会自动声明以下 RabbitMQ 拓扑：
 
@@ -28,7 +21,7 @@
 
 ## 本地运行
 
-在仓库根目录运行。当前电脑已同步 `.local/action-guard.env`（权限 `600`），Spring 自动导入其中的密码；该目录已加入忽略规则，密码不会打包进 JAR。其他机器通过环境变量提供密码，或用 `ACTION_GUARD_LOCAL_CONFIG` 指定本地配置文件的绝对路径。IDE 的工作目录应设置为仓库根目录；Maven 启动已配置该工作目录。
+在仓库根目录运行。Spring 自动导入被忽略的 `.local/action-guard.env`；该文件应保存远程基础设施地址、账号和密码，不会打包进 JAR。其他机器通过环境变量提供同名配置，或用 `ACTION_GUARD_LOCAL_CONFIG` 指定本地配置文件的绝对路径。IDE 的工作目录应设置为仓库根目录；Maven 启动已配置该工作目录。
 
 MySQL URL 使用 `sslMode=REQUIRED` 加密传输但不校验服务端证书身份；RabbitMQ 当前为未加密 AMQP，可用服务器安全组限制来源 IP。管理页面端口不是 AMQP 连接端口。
 
@@ -73,7 +66,7 @@ bash scripts/run-demo-stability.sh
 - 先执行一次 `compile`
 - 然后并发启动多次 demo 实例
 - 每个实例都会分配独立 `SERVER_PORT`
-- 每个实例显式启用 `h2` profile，并分配独立 `DEMO_H2_PATH`；RabbitMQ 仍使用远程连接配置
+- 每个实例显式启用 `h2` profile，并分配独立 `DEMO_H2_PATH`；RabbitMQ 默认连接本机 `localhost:5672`
 - 每个实例都会真实走一条 `publish -> RabbitMQ -> runtime -> SUCCESS` 链路
 - 最后在 `.tmp/action-guard-stability/<timestamp>/` 下输出分 run 日志，并汇总成功/失败数
 
@@ -91,7 +84,7 @@ ACTION_GUARD_STABILITY_LOG_DIR
 
 ## 可覆盖环境变量
 
-如果你的本地环境不是这组默认值，可以覆盖这些环境变量：
+远程 demo 所需的连接信息通过以下环境变量或 `.local/action-guard.env` 提供：
 
 ```bash
 MYSQL_URL

@@ -121,6 +121,7 @@
 | `topic` | 逻辑任务类型，例如 `ACTION_EXECUTE` 或 `ACTION_COMPENSATE` |
 | `status` | `NEW`、`CLAIMED`、`DONE`、`DEAD` |
 | `available_at` | 最早可派发时间 |
+| `delivery_attempt_count` | 仅消息发送失败次数，达到上限后不再自动投递 |
 | `lease_owner` | worker 或节点标识 |
 | `lease_expires_at` | claim 过期时间 |
 | `attempt_count` | 派发尝试次数 |
@@ -141,7 +142,7 @@
 - `DONE` 表示消息生产者已返回发送成功且发布状态已落库，不表示消息已被消费，也不等于整个 Action 已经成功完成
 
 当前实现中，三条投递路径发送失败时均在原有 `attempt_count` 上加一，成功发送不增加该值。
-步骤级业务重试调度仍沿用现有逻辑加一，因此该字段是累计计数，不应直接当作纯 MQ 发送次数。
+步骤级业务重试调度仍沿用现有逻辑加一，因此该字段是累计计数，不应直接当作纯 MQ 发送次数；`delivery_attempt_count` 才是投递死信阈值的依据。达到 10 次后状态进入 `DEAD`，不会再被恢复扫描选中。
 
 ## action_consume_log
 

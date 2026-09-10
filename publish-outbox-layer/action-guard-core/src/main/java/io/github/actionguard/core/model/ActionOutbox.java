@@ -15,6 +15,7 @@ import java.time.Instant;
  * @param availableAt 任务可调度时间，用于控制延迟重试与恢复扫描候选范围
  * @param attemptCount 累计计数，初始为 {@code 0}；当前投递失败回退和业务重试调度都会加一，
  *                     正常步骤推进保留原值，因此不能解释为纯 MQ 失败次数或步骤执行次数
+ * @param deliveryAttemptCount 仅统计消息发送失败次数；达到投递策略上限后记录进入 {@code DEAD}
  * @param version 持久化乐观锁版本号，成功更新时递增，用于投递抢占与并发冲突检测
  * @param createdAt 记录创建时间，后续重新调度保留此值
  * @param updatedAt 最近更新时间，恢复扫描结合超时规则判断能否接管已抢占记录
@@ -27,6 +28,7 @@ public record ActionOutbox(
         ActionOutboxStatus status,
         Instant availableAt,
         int attemptCount,
+        int deliveryAttemptCount,
         int version,
         Instant createdAt,
         Instant updatedAt
@@ -35,6 +37,13 @@ public record ActionOutbox(
             String id, String actionInstanceId, String topic, ActionOutboxStatus status,
             Instant availableAt, int attemptCount, int version, Instant createdAt, Instant updatedAt
     ) {
-        this(id, actionInstanceId, topic, id, status, availableAt, attemptCount, version, createdAt, updatedAt);
+        this(id, actionInstanceId, topic, id, status, availableAt, attemptCount, 0, version, createdAt, updatedAt);
+    }
+
+    public ActionOutbox(
+            String id, String actionInstanceId, String topic, String dispatchId, ActionOutboxStatus status,
+            Instant availableAt, int attemptCount, int version, Instant createdAt, Instant updatedAt
+    ) {
+        this(id, actionInstanceId, topic, dispatchId, status, availableAt, attemptCount, 0, version, createdAt, updatedAt);
     }
 }

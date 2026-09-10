@@ -37,4 +37,7 @@ jobs:
         run: mvn -B test
 
       - name: Run Demo Smoke
+        env:
+          ACTION_GUARD_SMOKE_PROFILE: h2
+          DEMO_H2_PATH: ${{ runner.temp }}/action-guard/demo-db/action_guard_demo
         run: bash scripts/run-demo-smoke.sh
