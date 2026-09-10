@@ -12,6 +12,7 @@
                status,
                available_at as availableAt,
                attempt_count as attemptCount,
+               delivery_attempt_count as deliveryAttemptCount,
                version,
                created_at as createdAt,
                updated_at as updatedAt
@@ -21,9 +22,9 @@
 
     <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionOutboxRow">
         insert into action_outbox (
-            id, action_instance_id, topic, dispatch_id, status, available_at, attempt_count, version, created_at, updated_at
+            id, action_instance_id, topic, dispatch_id, status, available_at, attempt_count, delivery_attempt_count, version, created_at, updated_at
         ) values (
-            #{id}, #{actionInstanceId}, #{topic}, #{dispatchId}, #{status}, #{availableAt}, #{attemptCount}, #{version}, #{createdAt}, #{updatedAt}
+            #{id}, #{actionInstanceId}, #{topic}, #{dispatchId}, #{status}, #{availableAt}, #{attemptCount}, #{deliveryAttemptCount}, #{version}, #{createdAt}, #{updatedAt}
         )
     </insert>
 
@@ -34,6 +35,7 @@
             status = #{status},
             available_at = #{availableAt},
             attempt_count = #{attemptCount},
+            delivery_attempt_count = #{deliveryAttemptCount},
             version = version + 1,
             updated_at = #{updatedAt}
         where id = #{id}
@@ -48,6 +50,7 @@
                status,
                available_at as availableAt,
                attempt_count as attemptCount,
+               delivery_attempt_count as deliveryAttemptCount,
                version,
                created_at as createdAt,
                updated_at as updatedAt
@@ -65,6 +68,7 @@
                status,
                available_at as availableAt,
                attempt_count as attemptCount,
+               delivery_attempt_count as deliveryAttemptCount,
                version,
                created_at as createdAt,
                updated_at as updatedAt

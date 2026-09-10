@@ -11,6 +11,7 @@ public class ActionOutboxRow {
     private String status;
     private Timestamp availableAt;
     private int attemptCount;
+    private int deliveryAttemptCount;
     private int version;
     private Timestamp createdAt;
     private Timestamp updatedAt;
@@ -29,6 +30,8 @@ public class ActionOutboxRow {
     public void setAvailableAt(Timestamp availableAt) { this.availableAt = availableAt; }
     public int getAttemptCount() { return attemptCount; }
     public void setAttemptCount(int attemptCount) { this.attemptCount = attemptCount; }
+    public int getDeliveryAttemptCount() { return deliveryAttemptCount; }
+    public void setDeliveryAttemptCount(int deliveryAttemptCount) { this.deliveryAttemptCount = deliveryAttemptCount; }
     public int getVersion() { return version; }
     public void setVersion(int version) { this.version = version; }
     public Timestamp getCreatedAt() { return createdAt; }

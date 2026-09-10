@@ -4,7 +4,7 @@ spring:
   datasource:
     username: ${MYSQL_USERNAME:action_guard}
     password: ${MYSQL_PASSWORD:}
-    url: ${MYSQL_URL:jdbc:mysql://154.36.178.66:3306/action-guard?sslMode=REQUIRED&characterEncoding=UTF-8&connectionTimeZone=UTC}
+    url: ${MYSQL_URL}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:

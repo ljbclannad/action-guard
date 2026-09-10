@@ -59,6 +59,7 @@ public class InMemoryActionOutboxRepository implements ActionOutboxRepository {
                 outbox.status(),
                 outbox.availableAt(),
                 outbox.attemptCount(),
+                outbox.deliveryAttemptCount(),
                 currentVersion + 1,
                 outbox.createdAt(),
                 outbox.updatedAt()

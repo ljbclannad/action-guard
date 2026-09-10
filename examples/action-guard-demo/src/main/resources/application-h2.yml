@@ -7,3 +7,9 @@ spring:
   sql:
     init:
       mode: always
+  rabbitmq:
+    host: ${ACTION_GUARD_H2_RABBITMQ_HOST:localhost}
+    port: ${ACTION_GUARD_H2_RABBITMQ_PORT:5672}
+    username: ${ACTION_GUARD_H2_RABBITMQ_USERNAME:guest}
+    password: ${ACTION_GUARD_H2_RABBITMQ_PASSWORD:guest}
+    virtual-host: ${ACTION_GUARD_H2_RABBITMQ_VIRTUAL_HOST:/}

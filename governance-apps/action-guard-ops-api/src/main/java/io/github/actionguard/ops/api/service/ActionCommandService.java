@@ -2,6 +2,7 @@ package io.github.actionguard.ops.api.service;
 
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
+import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
 import io.github.actionguard.core.model.ActionStatus;
@@ -11,6 +12,7 @@ import io.github.actionguard.core.repository.ActionStepInstanceRepository;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.execution.ActionOutboxDispatcher;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import io.github.actionguard.core.runtime.state.ActionTransitionContext;
 import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
@@ -23,9 +25,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 public class ActionCommandService {
 
@@ -39,6 +43,7 @@ public class ActionCommandService {
     private final ActionObservabilityService actionObservabilityService;
     private final ActionTransitionLogRepository actionTransitionLogRepository;
     private final ActionTransitionService actionTransitionService;
+    private final ActionOutboxDispatcher outboxDispatcher;
 
     public ActionCommandService(
             ActionInstanceRepository actionInstanceRepository,
@@ -88,6 +93,12 @@ public class ActionCommandService {
                 this.actionTransitionLogRepository,
                 this.actionObservabilityService
         );
+        this.outboxDispatcher = new ActionOutboxDispatcher(
+                this.actionOutboxRepository,
+                this.producer,
+                this.actionObservabilityService,
+                Clock.systemUTC()
+        );
     }
 
     public ActionCommandService(
@@ -120,14 +131,18 @@ public class ActionCommandService {
             ActionOutbox outbox = actionOutboxRepository.findByActionInstanceId(actionInstanceId)
                     .orElseThrow(() -> new IllegalStateException("Outbox not found for action: " + actionInstanceId));
             if (actionInstance.status() == ActionStatus.RETRYING
-                    && (outbox.status() == io.github.actionguard.core.model.ActionOutboxStatus.NEW
-                    || outbox.status() == io.github.actionguard.core.model.ActionOutboxStatus.CLAIMED)) {
+                    && (outbox.status() == ActionOutboxStatus.NEW
+                    || outbox.status() == ActionOutboxStatus.CLAIMED)) {
                 auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry already scheduled");
                 actionObservabilityService.governanceCommand("RETRY", "SUCCESS");
                 return;
             }
-            validator.validateRetry(actionInstance.status());
-            publishOutboxAfterCommit(outbox);
+            if (outbox.status() == ActionOutboxStatus.DEAD) {
+                validateDeadOutboxRetry(actionInstance.status());
+            } else {
+                validator.validateRetry(actionInstance.status());
+            }
+            publishOutboxAfterCommit(requeueOutbox(outbox));
             auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry dispatched");
             actionObservabilityService.governanceCommand("RETRY", "SUCCESS");
         } catch (RuntimeException ex) {
@@ -283,9 +298,11 @@ public class ActionCommandService {
                 outbox.id(),
                 outbox.actionInstanceId(),
                 outbox.topic(),
-                io.github.actionguard.core.model.ActionOutboxStatus.NEW,
+                UUID.randomUUID().toString(),
+                ActionOutboxStatus.NEW,
                 now,
                 outbox.attemptCount(),
+                0,
                 outbox.version(),
                 outbox.createdAt(),
                 now
@@ -294,17 +311,40 @@ public class ActionCommandService {
     }
 
     private void publishOutboxAfterCommit(ActionOutbox outbox) {
-        ActionExecutionMessageProducer requiredProducer = producer
-                .orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available"));
+        producer.orElseThrow(() -> new IllegalStateException("ActionExecutionMessageProducer is not available"));
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            requiredProducer.publish(outbox);
+            outboxDispatcher.dispatch(outbox, 1);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                requiredProducer.publish(outbox);
+                outboxDispatcher.dispatch(outbox, 1);
             }
         });
+    }
+
+    private ActionOutbox requeueOutbox(ActionOutbox outbox) {
+        Instant now = Instant.now();
+        return actionOutboxRepository.save(new ActionOutbox(
+                outbox.id(),
+                outbox.actionInstanceId(),
+                outbox.topic(),
+                UUID.randomUUID().toString(),
+                ActionOutboxStatus.NEW,
+                now,
+                outbox.attemptCount(),
+                0,
+                outbox.version(),
+                outbox.createdAt(),
+                now
+        ));
+    }
+
+    private void validateDeadOutboxRetry(ActionStatus status) {
+        if (status != ActionStatus.NEW && status != ActionStatus.DISPATCHING
+                && status != ActionStatus.RETRYING && status != ActionStatus.FAILED) {
+            throw new IllegalStateException("Retry is not allowed for action status: " + status);
+        }
     }
 }

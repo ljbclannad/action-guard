@@ -69,6 +69,8 @@
 - 保留已有状态字段和 version 字段语义稳定
 - 通过 schema 脚本增量演进，避免运行中实例无法识别旧数据
 
+`0.1.0` 起新增列或索引时，同时提供位于 `action-guard-store-mysql/src/main/resources/db/migration/` 的人工迁移脚本；现有安装需在升级应用前执行对应脚本。
+
 当前默认演示使用：
 
 - H2 file

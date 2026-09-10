@@ -39,6 +39,7 @@ public class MysqlActionOutboxRepository implements ActionOutboxRepository {
                 outbox.status(),
                 outbox.availableAt(),
                 outbox.attemptCount(),
+                outbox.deliveryAttemptCount(),
                 outbox.version() + 1,
                 outbox.createdAt(),
                 outbox.updatedAt()
@@ -75,6 +76,7 @@ public class MysqlActionOutboxRepository implements ActionOutboxRepository {
         row.setStatus(outbox.status().name());
         row.setAvailableAt(Timestamp.from(outbox.availableAt()));
         row.setAttemptCount(outbox.attemptCount());
+        row.setDeliveryAttemptCount(outbox.deliveryAttemptCount());
         row.setVersion(outbox.version());
         row.setCreatedAt(Timestamp.from(outbox.createdAt()));
         row.setUpdatedAt(Timestamp.from(outbox.updatedAt()));
@@ -90,6 +92,7 @@ public class MysqlActionOutboxRepository implements ActionOutboxRepository {
                 ActionOutboxStatus.valueOf(row.getStatus()),
                 row.getAvailableAt().toInstant(),
                 row.getAttemptCount(),
+                row.getDeliveryAttemptCount(),
                 row.getVersion(),
                 row.getCreatedAt().toInstant(),
                 row.getUpdatedAt().toInstant()
