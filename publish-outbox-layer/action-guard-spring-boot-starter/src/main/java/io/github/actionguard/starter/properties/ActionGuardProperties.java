@@ -11,6 +11,7 @@ public class ActionGuardProperties {
     private int publishRetryMaxAttempts = 1;
     private boolean metricsEnabled = true;
     private ActionGuardRecoveryProperties recovery = new ActionGuardRecoveryProperties();
+    private Execution execution = new Execution();
 
     public List<String> getDefinitionLocations() {
         return definitionLocations;
@@ -42,5 +43,28 @@ public class ActionGuardProperties {
 
     public void setRecovery(ActionGuardRecoveryProperties recovery) {
         this.recovery = recovery;
+    }
+
+    public Execution getExecution() {
+        return execution;
+    }
+
+    public void setExecution(Execution execution) {
+        this.execution = execution;
+    }
+
+    public static class Execution {
+        /**
+         * 未选择时不装配框架默认消息通道，仍允许业务自定义生产者。
+         */
+        private String transport;
+
+        public String getTransport() {
+            return transport;
+        }
+
+        public void setTransport(String transport) {
+            this.transport = transport;
+        }
     }
 }

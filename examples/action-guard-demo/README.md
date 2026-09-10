@@ -2,7 +2,12 @@
 
 默认示例展示单步成功链路；[故障与治理演示](#故障与治理演示)通过独立的 `fault-demo` profile 展示自动重试和人工跳过。
 
-本应用在 `application.yml` 中显式配置 `action.guard.store.type=mysql`，默认连接当前服务器的 MySQL 和 RabbitMQ；`fault-demo` 沿用该配置。MySQL 驱动由存储模块以运行时依赖提供。原 H2 数据不会自动迁移；需要 H2 时显式启用 `h2` profile。
+本应用在 `application.yml` 中显式配置 `action.guard.store.type=mysql` 和 `action.guard.execution.transport=rabbitmq`，默认连接当前服务器的 MySQL 和 RabbitMQ；`fault-demo` 沿用该配置。MySQL
+驱动由存储模块以运行时依赖提供。原 H2 数据不会自动迁移；需要 H2 时显式启用 `h2` profile，执行传输仍沿用 `rabbitmq`。
+
+不要通过删除传输选择来切换本地执行：未配置时不装配框架默认 RabbitMQ 生产者和消费者，没有自定义生产者时 Outbox 不发送，也不会自动执行步骤；Spring Boot 的 `RabbitTemplate`
+仍可供其他业务使用。示例的业务配置按同一选择条件启用拓扑，并非适配器自动提供拓扑；用户自定义拓扑需自行添加启用条件。选择 `rabbitmq`
+后缺少适配器或模板会启动报错，但不进行网络探活。取值约束和自定义生产者说明见 [执行传输选择](../../docs/guides/starter-config.md#执行传输选择)。
 
 ## 运行前置条件
 

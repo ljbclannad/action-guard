@@ -39,6 +39,19 @@
 
 该改动不改变表结构或持久化数据格式，也不会将内存或 H2 数据自动迁移到 MySQL。选择 `mysql` 后不再通过缺失 Bean 的内存回退补齐数据库仓储。示例和最小配置模板已同步声明 `mysql`。
 
+### 执行传输配置迁移
+
+`action.guard.execution.transport` 改为显式选择默认执行通道，是默认装配行为的破坏性变化。过去仅依赖 RabbitMQ 适配器或 `RabbitTemplate` 自动启用执行链路的应用，升级时需补充
+`action.guard.execution.transport=rabbitmq`，并保留适配器依赖、`spring.rabbitmq.*` 连接和 `action.guard.rabbitmq.*` 拓扑配置；demo 和最小模板已同步。
+
+- 未配置时，不装配框架默认 RabbitMQ 生产者和消费者；不关闭 Spring Boot 的 `RabbitTemplate` 自动配置，其他业务使用 RabbitMQ 不受该选择影响。拓扑由应用配置提供，示例拓扑按同一选择条件启用；用户自定义拓扑需自行添加启用条件，不能假定该配置会自动关闭所有拓扑
+  Bean。
+- 自定义 `ActionExecutionMessageProducer` Bean 的接入与覆盖机制保留，未配置传输选择也可继续使用。没有生产者时 Outbox 不发送，不会自动回退为本地执行；升级后不能仅以应用启动成功判断执行链路正常。
+- 当前仅允许 `rabbitmq`，忽略大小写但不执行 `trim`；空值、纯空白、带首尾空格或其他值非法。不要用空字符串表示禁用，应移除该配置项。
+- 显式选择 `rabbitmq` 后，即使使用自定义生产者，也需具备 RabbitMQ 适配器和 `RabbitTemplate`；缺失时启动报错。校验不进行网络探活，需另外验证 broker 连接、拓扑及端到端消费。
+
+该变更不涉及表结构、持久化数据格式或消息协议迁移。配置细节见 [执行传输选择](../guides/starter-config.md#执行传输选择)。
+
 ### 通用策略
 
 升级兼容优先级建议：

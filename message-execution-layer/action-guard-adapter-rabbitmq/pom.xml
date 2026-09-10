@@ -47,5 +47,15 @@
       <version>${assertj.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.ljbclannad.actionguard</groupId>
+      <artifactId>action-guard-spring-boot-starter</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

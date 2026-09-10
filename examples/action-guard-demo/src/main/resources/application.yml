@@ -35,6 +35,8 @@ action:
   guard:
     store:
       type: mysql
+    execution:
+      transport: rabbitmq
     definition-locations:
       - classpath*:actions/*.yml
     recovery:

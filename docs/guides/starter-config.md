@@ -32,6 +32,27 @@ action:
 
 治理查询和审计接口仍依赖 JDBC 数据库，不随 `memory` 自动变成内存版；带治理接口的 demo 应继续使用 `mysql`。
 
+## 执行传输选择
+
+使用框架默认 RabbitMQ 执行链路时，必须显式配置：
+
+```yaml
+action:
+  guard:
+    execution:
+      transport: rabbitmq
+```
+
+- `action.guard.execution.transport` 无默认值；未配置时，不装配框架默认的 RabbitMQ 执行消息生产者和消费者。它不关闭 Spring Boot 的 `RabbitTemplate` 自动配置，其他业务仍可使用 RabbitMQ。
+- 拓扑由应用配置提供，而非适配器默认装配；示例中的拓扑 Bean 按同一传输选择条件启用，用户自定义拓扑需自行添加启用条件。
+- 当前仅支持 `rabbitmq`，忽略大小写但不执行 `trim`；空值、纯空白、带首尾空格或其他值均非法，会导致启动失败。
+- 选择 `rabbitmq` 后，缺少 `action-guard-adapter-rabbitmq` 或 `RabbitTemplate` 会在启动时报告缺失条件。该校验不进行网络探活，不代表 broker、认证或拓扑可用，仍需实际联调。
+- 自定义 `ActionExecutionMessageProducer` Bean 的接入与覆盖机制保留；未配置传输选择时仍可使用自定义生产者。选择 `rabbitmq` 时仍需满足上述适配器和模板条件。
+- 没有任何消息生产者时，Outbox 不发送，也不会自动回退为本地执行；恢复扫描不能替代缺失的消息通道。
+
+`action.guard.rabbitmq.*` 配置拓扑和消费参数，`spring.rabbitmq.*` 配置连接；两者都不能替代 `action.guard.execution.transport` 的显式选择。已有 RabbitMQ
+接入只需补充这个选择键，其他配置默认值保持不变，无需为此重新声明已有默认参数。旧应用迁移见 [执行传输配置迁移](../maintenance/compatibility-and-versioning.md#执行传输配置迁移)。
+
 ## 执行结果事务接入
 
 选择 `mysql` 时，存储自动配置在 Spring Boot 数据源自动配置之后、Starter 核心配置之前运行。存储模块复用已有 `ObjectMapper`，仅在缺少该类型 Bean 时创建默认实例；提供自定义实例会影响持久化 JSON 的序列化行为。
