@@ -1,0 +1,13 @@
+action:
+  guard:
+    execution:
+      transport: rocketmq
+    rocketmq:
+      name-server: ${DEMO_ROCKETMQ_NAMESRV:154.36.178.66:9876}
+      topic: ${DEMO_ROCKETMQ_TOPIC:action-guard-execute}
+      producer-group: ${DEMO_ROCKETMQ_PRODUCER_GROUP:action-guard-demo-producer}
+      consumer-group: ${DEMO_ROCKETMQ_CONSUMER_GROUP:action-guard-demo-consumer}
+      max-redeliveries: ${DEMO_ROCKETMQ_MAX_REDELIVERIES:1}
+      startup-probe-enabled: ${DEMO_ROCKETMQ_STARTUP_PROBE_ENABLED:true}
+      startup-probe-topic: ${DEMO_ROCKETMQ_STARTUP_PROBE_TOPIC:action-guard-health-probe}
+      startup-probe-timeout: ${DEMO_ROCKETMQ_STARTUP_PROBE_TIMEOUT:10s}

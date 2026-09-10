@@ -5,6 +5,9 @@
 本应用在 `application.yml` 中显式配置 `action.guard.store.type=mysql` 和 `action.guard.execution.transport=rabbitmq`，默认连接当前服务器的 MySQL 和 RabbitMQ；`fault-demo` 沿用该配置。MySQL
 驱动由存储模块以运行时依赖提供。原 H2 数据不会自动迁移；需要 H2 时显式启用 `h2` profile，执行传输仍沿用 `rabbitmq`。
 
+如需改用已部署的 RocketMQ，启动时增加 `--spring.profiles.active=rocketmq`。该 profile 将传输切为 `rocketmq`，默认连接 `154.36.178.66:9876`；可用 `DEMO_ROCKETMQ_NAMESRV`、`DEMO_ROCKETMQ_TOPIC`、
+`DEMO_ROCKETMQ_PRODUCER_GROUP` 和 `DEMO_ROCKETMQ_CONSUMER_GROUP` 覆盖。运行前请在 Broker 创建对应 topic（默认 `action-guard-execute`），或确认 Broker 已启用受控的自动建 topic。RocketMQ topic 不能使用 `.`。
+
 不要通过删除传输选择来切换本地执行：未配置时不装配框架默认 RabbitMQ 生产者和消费者，没有自定义生产者时 Outbox 不发送，也不会自动执行步骤；Spring Boot 的 `RabbitTemplate`
 仍可供其他业务使用。示例的业务配置按同一选择条件启用拓扑，并非适配器自动提供拓扑；用户自定义拓扑需自行添加启用条件。选择 `rabbitmq`
 后缺少适配器或模板会启动报错，但不进行网络探活。取值约束和自定义生产者说明见 [执行传输选择](../../docs/guides/starter-config.md#执行传输选择)。

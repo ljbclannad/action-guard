@@ -99,24 +99,34 @@ public class ActionGuardAutoConfiguration {
             if (transport == null) {
                 return;
             }
-            if (!"rabbitmq".equalsIgnoreCase(transport)) {
+            if (!"rabbitmq".equalsIgnoreCase(transport) && !"rocketmq".equalsIgnoreCase(transport)) {
                 throw new IllegalStateException("action.guard.execution.transport='" + transport
-                        + "'，仅支持 rabbitmq，不能配置空值或空白");
+                        + "'，仅支持 rabbitmq 或 rocketmq，不能配置空值或空白");
             }
             ClassLoader classLoader = beanFactory.getBeanClassLoader();
-            String adapterClass = "io.github.actionguard.adapter.rabbitmq.config.RabbitMqActionExecutionAutoConfiguration";
-            String templateClass = "org.springframework.amqp.rabbit.core.RabbitTemplate";
+            boolean rabbitMq = "rabbitmq".equalsIgnoreCase(transport);
+            String adapterClass = rabbitMq
+                    ? "io.github.actionguard.adapter.rabbitmq.config.RabbitMqActionExecutionAutoConfiguration"
+                    : "io.github.actionguard.adapter.rocketmq.config.RocketMqActionExecutionAutoConfiguration";
+            String clientClass = rabbitMq
+                    ? "org.springframework.amqp.rabbit.core.RabbitTemplate"
+                    : "org.apache.rocketmq.client.producer.DefaultMQProducer";
+            String transportName = rabbitMq ? "RabbitTemplate" : "RocketMQ 客户端";
             if (!ClassUtils.isPresent(adapterClass, classLoader)) {
-                throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要引入 action-guard-adapter-rabbitmq 模块");
+                throw new IllegalStateException("action.guard.execution.transport=" + transport
+                        + " 需要引入 action-guard-adapter-" + transport.toLowerCase() + " 模块");
             }
-            if (!ClassUtils.isPresent(templateClass, classLoader)
-                    || beanFactory.getBeanNamesForType(ClassUtils.resolveClassName(templateClass, classLoader),
+            if (!ClassUtils.isPresent(clientClass, classLoader)) {
+                throw new IllegalStateException("action.guard.execution.transport=" + transport + " 需要 " + transportName);
+            }
+            if (rabbitMq && beanFactory.getBeanNamesForType(ClassUtils.resolveClassName(clientClass, classLoader),
                     true, false).length == 0) {
                 throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要配置 RabbitTemplate");
             }
             if (beanFactory.getBeanNamesForType(ClassUtils.resolveClassName(adapterClass, classLoader),
                     true, false).length == 0) {
-                throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要启用 RabbitMqActionExecutionAutoConfiguration 自动配置");
+                throw new IllegalStateException("action.guard.execution.transport=" + transport
+                        + " 需要启用对应的执行适配器自动配置");
             }
         };
     }
