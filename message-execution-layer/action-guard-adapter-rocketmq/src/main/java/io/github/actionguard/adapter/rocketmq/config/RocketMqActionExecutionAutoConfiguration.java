@@ -36,7 +36,7 @@ public class RocketMqActionExecutionAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(name = "actionGuardRocketMqObjectMapper")
+    @ConditionalOnMissingBean(ObjectMapper.class)
     public ObjectMapper actionGuardRocketMqObjectMapper() {
         return new ObjectMapper().findAndRegisterModules();
     }

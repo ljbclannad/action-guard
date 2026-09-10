@@ -9,9 +9,11 @@ import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
+import org.apache.rocketmq.common.message.MessageQueue;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +24,7 @@ class RocketMqActionExecutionMessageProducerTest {
         CapturingProducer client = new CapturingProducer();
         ActionGuardRocketMqProperties properties = new ActionGuardRocketMqProperties();
         properties.setTopic("action-guard-execute");
-        RocketMqActionExecutionMessageProducer producer = new RocketMqActionExecutionMessageProducer(
+        TestableRocketMqActionExecutionMessageProducer producer = new TestableRocketMqActionExecutionMessageProducer(
                 client, new ObjectMapper().findAndRegisterModules(), new ActionExecutionMessageFactory(), properties);
 
         producer.publish(new ActionOutbox(
@@ -31,6 +33,7 @@ class RocketMqActionExecutionMessageProducerTest {
                 Instant.parse("2026-06-26T08:10:00Z"), Instant.parse("2026-06-26T08:10:00Z")));
 
         assertThat(client.message.getTopic()).isEqualTo("action-guard-execute");
+        assertThat(client.topicRouteLoaded).isTrue();
         assertThat(client.message.getKeys()).isEqualTo("ACTION_EXECUTE:outbox-1");
         assertThat(client.message.getUserProperty("actionGuardMessageKey")).isEqualTo("ACTION_EXECUTE:action-1");
         assertThat(client.message.getUserProperty("actionGuardOutboxId")).isEqualTo("outbox-1");
@@ -39,6 +42,7 @@ class RocketMqActionExecutionMessageProducerTest {
 
     private static final class CapturingProducer extends DefaultMQProducer {
         private Message message;
+        private boolean topicRouteLoaded;
 
         @Override
         public void start() {
@@ -49,5 +53,21 @@ class RocketMqActionExecutionMessageProducerTest {
             this.message = message;
             return new SendResult(SendStatus.SEND_OK, "msg-id", "offset-id", null, 0L);
         }
+
+        @Override
+        public java.util.List<MessageQueue> fetchPublishMessageQueues(String topic) {
+            topicRouteLoaded = true;
+            return Collections.singletonList(new MessageQueue(topic, "broker-a", 0));
+        }
+    }
+
+    private static final class TestableRocketMqActionExecutionMessageProducer extends RocketMqActionExecutionMessageProducer {
+
+        private TestableRocketMqActionExecutionMessageProducer(DefaultMQProducer producer, ObjectMapper objectMapper,
+                                                               ActionExecutionMessageFactory messageFactory,
+                                                               ActionGuardRocketMqProperties properties) {
+            super(producer, objectMapper, messageFactory, properties);
+        }
+
     }
 }

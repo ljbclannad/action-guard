@@ -1,6 +1,7 @@
 package io.github.actionguard.adapter.rocketmq.health;
 
 import io.github.actionguard.adapter.rocketmq.config.ActionGuardRocketMqProperties;
+import io.github.actionguard.adapter.rocketmq.producer.RocketMqProducerOperations;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -64,12 +65,13 @@ public class RocketMqStartupProbe {
 
             // 临时生产者通过同一个 NameServer 发现 Broker，并用同步发送取得 Broker 接收确认。
             producer.setNamesrvAddr(properties.getNameServer());
-            producer.start();
+            RocketMqProducerOperations.startAndLoadTopicRoute(producer, properties.getStartupProbeTopic());
             Message message = new Message(properties.getStartupProbeTopic(), "action-guard-startup-probe".getBytes(StandardCharsets.UTF_8));
             // keys 便于在 Dashboard 或 mqadmin 中定位本次启动探测消息。
             message.setKeys(probeId);
             message.putUserProperty(PROBE_ID_PROPERTY, probeId);
-            SendResult result = producer.send(message, properties.getStartupProbeTimeout().toMillis());
+            SendResult result = RocketMqProducerOperations.sendAfterProducerRegistration(
+                    producer, message, properties.getStartupProbeTimeout());
             if (result.getSendStatus() != SendStatus.SEND_OK) {
                 throw new IllegalStateException("RocketMQ 启动探活发送未被 Broker 确认: " + result.getSendStatus());
             }

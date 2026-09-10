@@ -1,11 +1,14 @@
 package io.github.actionguard.adapter.rocketmq.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.adapter.rocketmq.producer.RocketMqActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.starter.config.ActionGuardAutoConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,5 +46,21 @@ class RocketMqActionExecutionAutoConfigurationTest {
                 .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ActionExecutionMessageProducer.class)
                         .getBean(ActionExecutionMessageProducer.class)
                         .isInstanceOf(RocketMqActionExecutionMessageProducer.class));
+    }
+
+    @Test
+    void shouldReuseExistingObjectMapper() {
+        runner.withUserConfiguration(ExistingObjectMapperConfiguration.class)
+                .withPropertyValues("action.guard.execution.transport=rocketmq",
+                        "action.guard.rocketmq.name-server=unused.invalid:9876")
+                .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ObjectMapper.class));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class ExistingObjectMapperConfiguration {
+        @Bean
+        ObjectMapper actionGuardObjectMapper() {
+            return new ObjectMapper().findAndRegisterModules();
+        }
     }
 }

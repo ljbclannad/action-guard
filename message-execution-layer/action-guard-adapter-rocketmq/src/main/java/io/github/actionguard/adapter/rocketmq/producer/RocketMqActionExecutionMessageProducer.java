@@ -48,7 +48,8 @@ public class RocketMqActionExecutionMessageProducer implements ActionExecutionMe
         ActionExecutionMessage executionMessage = messageFactory.create(outbox);
         try {
             ensureStarted();
-            SendResult result = producer.send(toRocketMqMessage(executionMessage), properties.getSendTimeout().toMillis());
+            SendResult result = RocketMqProducerOperations.sendAfterProducerRegistration(
+                    producer, toRocketMqMessage(executionMessage), properties.getSendTimeout());
             if (result.getSendStatus() != SendStatus.SEND_OK) {
                 throw new IllegalStateException("RocketMQ did not accept action execution message: " + result.getSendStatus());
             }
@@ -69,7 +70,7 @@ public class RocketMqActionExecutionMessageProducer implements ActionExecutionMe
     private synchronized void ensureStarted() throws Exception {
         if (started.compareAndSet(false, true)) {
             try {
-                producer.start();
+                RocketMqProducerOperations.startAndLoadTopicRoute(producer, properties.getTopic());
             } catch (Exception ex) {
                 started.set(false);
                 throw ex;
