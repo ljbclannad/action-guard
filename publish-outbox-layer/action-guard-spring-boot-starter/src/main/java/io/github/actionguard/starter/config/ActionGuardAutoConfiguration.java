@@ -1,48 +1,12 @@
 package io.github.actionguard.starter.config;
 
-import java.io.IOException;
-import java.time.Clock;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import javax.sql.DataSource;
-
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.util.ClassUtils;
-
 import io.github.actionguard.api.ActionPublisher;
 import io.github.actionguard.api.definition.ActionDefinition;
-import io.github.actionguard.api.spi.ActionAlertPublisher;
-import io.github.actionguard.api.spi.ActionCompensator;
-import io.github.actionguard.api.spi.ActionMetricsRecorder;
-import io.github.actionguard.api.spi.ActionRetryPolicy;
-import io.github.actionguard.api.spi.ActionStepHandler;
-import io.github.actionguard.core.repository.ActionCompensationLogRepository;
-import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
-import io.github.actionguard.core.repository.ActionInstanceRepository;
-import io.github.actionguard.core.repository.ActionOutboxRepository;
-import io.github.actionguard.core.repository.ActionStepInstanceRepository;
-import io.github.actionguard.core.repository.ActionTransitionLogRepository;
-import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
-import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
-import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
-import io.github.actionguard.core.repository.InMemoryActionTransitionLogRepository;
+import io.github.actionguard.api.spi.*;
+import io.github.actionguard.core.repository.*;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationService;
 import io.github.actionguard.core.runtime.compensation.ActionCompensatorRegistry;
-import io.github.actionguard.core.runtime.definition.ActionDefinitionLoader;
-import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
-import io.github.actionguard.core.runtime.definition.ActionDefinitionValidator;
-import io.github.actionguard.core.runtime.definition.InMemoryActionDefinitionRegistry;
-import io.github.actionguard.core.runtime.definition.YamlActionDefinitionLoader;
+import io.github.actionguard.core.runtime.definition.*;
 import io.github.actionguard.core.runtime.execution.ActionExecutionCallback;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.execution.DefaultActionExecutionCallback;
@@ -56,6 +20,24 @@ import io.github.actionguard.starter.metrics.InMemoryActionMetricsRecorder;
 import io.github.actionguard.starter.properties.ActionGuardProperties;
 import io.github.actionguard.starter.publisher.TransactionalActionPublisher;
 import io.github.actionguard.starter.scheduler.ActionOutboxRecoveryScheduler;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.util.ClassUtils;
+
+import javax.sql.DataSource;
+import java.io.IOException;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Action Guard starter 的核心自动配置入口。
@@ -103,6 +85,38 @@ public class ActionGuardAutoConfiguration {
                 if (beanFactory.getBeanNamesForType(DataSource.class, false, false).length == 0) {
                     throw new IllegalStateException("action.guard.store.type=mysql 需要配置 DataSource 和数据库驱动");
                 }
+            }
+        };
+    }
+
+    /**
+     * 仅检查类型和 Bean 定义，不提前实例化连接工厂或访问消息服务器。
+     */
+    @Bean
+    public static BeanFactoryPostProcessor actionGuardExecutionTransportSelectionValidator(Environment environment) {
+        return beanFactory -> {
+            String transport = environment.getProperty("action.guard.execution.transport");
+            if (transport == null) {
+                return;
+            }
+            if (!"rabbitmq".equalsIgnoreCase(transport)) {
+                throw new IllegalStateException("action.guard.execution.transport='" + transport
+                        + "'，仅支持 rabbitmq，不能配置空值或空白");
+            }
+            ClassLoader classLoader = beanFactory.getBeanClassLoader();
+            String adapterClass = "io.github.actionguard.adapter.rabbitmq.config.RabbitMqActionExecutionAutoConfiguration";
+            String templateClass = "org.springframework.amqp.rabbit.core.RabbitTemplate";
+            if (!ClassUtils.isPresent(adapterClass, classLoader)) {
+                throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要引入 action-guard-adapter-rabbitmq 模块");
+            }
+            if (!ClassUtils.isPresent(templateClass, classLoader)
+                    || beanFactory.getBeanNamesForType(ClassUtils.resolveClassName(templateClass, classLoader),
+                    true, false).length == 0) {
+                throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要配置 RabbitTemplate");
+            }
+            if (beanFactory.getBeanNamesForType(ClassUtils.resolveClassName(adapterClass, classLoader),
+                    true, false).length == 0) {
+                throw new IllegalStateException("action.guard.execution.transport=rabbitmq 需要启用 RabbitMqActionExecutionAutoConfiguration 自动配置");
             }
         };
     }

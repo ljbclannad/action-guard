@@ -47,6 +47,9 @@
 
 - 接入应用必须显式配置 `action.guard.store.type=memory` 或 `mysql`；不再自动回退到内存。现有 H2 demo 使用 `mysql` 对应的 JDBC/MyBatis 实现，具体数据库由数据源配置决定，参见 [存储实现选择](docs/guides/starter-config.md#存储实现选择)。
 - 推荐主路径为 `starter + rabbitmq + store-mysql`，再接入业务 `ActionStepHandler` 或能力适配模块。演示默认连接当前服务器的 MySQL 和 RabbitMQ，密码加载方式见 [demo 说明](examples/action-guard-demo/README.md)；H2 通过 `h2` profile 保留用于隔离验证。
+- 默认 RabbitMQ 执行链路需显式配置 `action.guard.execution.transport=rabbitmq`。缺省不装配框架默认生产者和消费者，但不关闭其他业务使用的 Spring Boot `RabbitTemplate`
+  ，仍兼容自定义消息生产者。示例拓扑按同一选择条件启用，用户自定义拓扑需自行添加启用条件。没有生产者时 Outbox
+  不发送、不自动本地执行；取值、启动校验及迁移说明见 [执行传输选择](docs/guides/starter-config.md#执行传输选择)。
 - Kafka、Redis 模块目前属于占位或待完善能力，不作为默认接入组合；具体选择参见 [模块选择建议](docs/guides/quick-start.md#模块选择)。
 - 步骤超时目前在 Handler 返回后判定，不会主动中断阻塞调用；下游客户端仍需配置超时。
 - MQ 发送与数据库状态更新不是原子操作，恢复可能重复投递。消费去重不能替代业务 Handler 和下游系统的幂等处理。

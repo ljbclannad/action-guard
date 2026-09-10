@@ -67,6 +67,7 @@
 应用侧至少要准备：
 
 - `action.guard.store.type`：H2 / MySQL JDBC 存储选择 `mysql`；仅内存运行选择 `memory`
+- `action.guard.execution.transport=rabbitmq`：显式启用框架默认 RabbitMQ 执行链路
 - `spring.datasource.*`
 - `spring.rabbitmq.*`
 
@@ -79,9 +80,15 @@ action:
   guard:
     store:
       type: mysql
+    execution:
+      transport: rabbitmq
 ```
 
 该值选择 JDBC/MyBatis 仓储，H2 测试同样适用。存储模块已提供运行时 `mysql-connector-j`，默认配置 `com.mysql.cj.jdbc.Driver` 和当前服务器连接信息。纯内存测试可配置 `memory`，不具备持久化保证。
+
+仅引入 RabbitMQ 适配器或配置连接不会启用默认执行生产者和消费者，必须显式选择 `rabbitmq`。示例拓扑由应用配置提供并按同一选择条件启用，用户自定义拓扑需自行添加启用条件。未配置时不影响其他业务使用 Spring
+Boot 的 `RabbitTemplate`，自定义消息生产者仍可接入；没有生产者时 Outbox 不发送，也不会自动本地执行。该选择仅支持 `rabbitmq`（忽略大小写、不去除首尾空格），空值及其他值非法；缺少适配器或 `RabbitTemplate`
+会启动报错，但配置校验不做网络探活。完整边界见 [执行传输选择](starter-config.md#执行传输选择)。
 
 可以直接从模板复制：
 

@@ -38,6 +38,12 @@
 
 存储由接入应用通过 `action.guard.store.type` 显式选择。Starter 负责选择校验、内存仓储配置和依赖 Repository 接口的运行时组装；`store-mysql` 仅在选择 `mysql` 时注册数据库仓储。缺少选择或 MySQL 必要条件时启动失败，不进行隐式内存回退。H2 demo 复用数据库仓储，不属于 `memory` 模式。
 
+执行传输由 `action.guard.execution.transport` 显式选择：缺省不装配框架默认 RabbitMQ 执行生产者和消费者，不影响 Spring Boot 为其他业务自动配置 `RabbitTemplate`。拓扑由应用配置负责，示例拓扑 Bean
+按同一选择条件启用，用户自定义拓扑需自行添加启用条件。当前仅支持 `rabbitmq`（忽略大小写、不执行 `trim`），空值及其他值非法。选择后缺少 RabbitMQ 适配器或模板会启动报错；这是装配条件校验，不进行网络探活。
+
+自定义 `ActionExecutionMessageProducer` 的接入与覆盖机制保留，未选择默认传输时仍可使用；显式选择 `rabbitmq` 后仍须满足其装配条件。没有生产者时 Outbox 不发送，不会回退为本地执行；下面的 MQ
+派发与消费流程以可用消息通道为前提。
+
 ### 1. 能力层
 
 这一层负责面向业务的执行能力。

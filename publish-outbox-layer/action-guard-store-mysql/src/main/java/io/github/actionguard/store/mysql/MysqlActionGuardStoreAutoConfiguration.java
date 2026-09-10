@@ -1,23 +1,17 @@
 package io.github.actionguard.store.mysql;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.actionguard.core.repository.ActionCompensationLogRepository;
-import io.github.actionguard.core.repository.ActionInstanceRepository;
-import io.github.actionguard.core.repository.ActionConsumeLogRepository;
-import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
-import io.github.actionguard.core.repository.ActionOutboxRepository;
-import io.github.actionguard.core.repository.ActionStepInstanceRepository;
-import io.github.actionguard.core.repository.ActionTransitionLogRepository;
+import io.github.actionguard.core.repository.*;
 import io.github.actionguard.store.mysql.mapper.ActionConsumeLogMapper;
 import io.github.actionguard.store.mysql.mapper.ActionInstanceMapper;
 import io.github.actionguard.store.mysql.mapper.ActionOutboxMapper;
 import io.github.actionguard.store.mysql.mapper.ActionStepInstanceMapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -33,7 +27,8 @@ public class MysqlActionGuardStoreAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(ObjectMapper.class)
     public ObjectMapper actionGuardObjectMapper() {
-        return new ObjectMapper();
+        // 自动配置顺序变化时仍识别 classpath 中的时间等模块，避免共享实例丢失序列化能力。
+        return new ObjectMapper().findAndRegisterModules();
     }
 
     @Bean
