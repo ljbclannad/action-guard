@@ -2,7 +2,7 @@ server:
   address: 127.0.0.1
 demo:
   runner:
-    enabled: false
+    enabled: true
 action:
   guard:
     definition-locations:

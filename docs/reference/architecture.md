@@ -23,25 +23,25 @@
 
 ### 模块职责
 
-| 模块 | 主要职责与代码入口 |
-| --- | --- |
-| `action-guard-api` | 公共请求、定义模型、Handler 等 SPI |
-| `action-guard-core` | `model` / `repository` 数据边界，`runtime` 下的发布、执行、状态迁移、恢复、补偿与观测 |
-| `action-guard-spring-boot-starter` | `config` 自动装配、`publisher` 事务接入、`scheduler` 调度、`properties` 配置绑定 |
-| `action-guard-store-mysql` | MyBatis 映射及 JDBC 仓储，当前覆盖实例、Outbox、消费、迁移和补偿日志等 |
-| `action-guard-adapter-rabbitmq` | `producer` 发送、`consumer` 消费，`support` 下的 ACK 与失败决策 |
-| `action-guard-adapter-notify` / `action-guard-adapter-im` | `handler` 解析与路由，`sender` 厂商接口，`model` 能力请求与结果 |
-| `action-guard-alert-webhook` | 将标准告警投递到 Webhook |
-| `action-guard-ops-api` / `action-guard-ops-web` | 治理查询、人工命令、审计，以及独立启动入口 |
+| 模块                                                              | 主要职责与代码入口                                                                    |
+|-------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| `action-guard-api`                                                | 公共请求、定义模型、Handler 等 SPI                                                    |
+| `action-guard-core`                                               | `model` / `repository` 数据边界，`runtime` 下的发布、执行、状态迁移、恢复、补偿与观测 |
+| `action-guard-spring-boot-starter`                                | `config` 自动装配、`publisher` 事务接入、`scheduler` 调度、`properties` 配置绑定      |
+| `action-guard-store-mysql`                                        | MyBatis 映射及 JDBC 仓储，当前覆盖实例、Outbox、消费、迁移和补偿日志等                |
+| `action-guard-adapter-rabbitmq` / `action-guard-adapter-rocketmq` | `producer` 发送、`consumer` 消费，`support` 下的 ACK、重试与死信决策                  |
+| `action-guard-adapter-notify` / `action-guard-adapter-im`         | `handler` 解析与路由，`sender` 厂商接口，`model` 能力请求与结果                       |
+| `action-guard-alert-webhook`                                      | 将标准告警投递到 Webhook                                                              |
+| `action-guard-ops-api` / `action-guard-ops-web`                   | 治理查询、人工命令、审计，以及独立启动入口                                            |
 
 应用按需引入适配器，Starter 不会自动引入全部能力模块。接入组合统一见快速开始，包结构以当前源码为准。
 
 存储由接入应用通过 `action.guard.store.type` 显式选择。Starter 负责选择校验、内存仓储配置和依赖 Repository 接口的运行时组装；`store-mysql` 仅在选择 `mysql` 时注册数据库仓储。缺少选择或 MySQL 必要条件时启动失败，不进行隐式内存回退。H2 demo 复用数据库仓储，不属于 `memory` 模式。
 
-执行传输由 `action.guard.execution.transport` 显式选择：缺省不装配框架默认 RabbitMQ 执行生产者和消费者，不影响 Spring Boot 为其他业务自动配置 `RabbitTemplate`。拓扑由应用配置负责，示例拓扑 Bean
-按同一选择条件启用，用户自定义拓扑需自行添加启用条件。当前仅支持 `rabbitmq`（忽略大小写、不执行 `trim`），空值及其他值非法。选择后缺少 RabbitMQ 适配器或模板会启动报错；这是装配条件校验，不进行网络探活。
+执行传输由 `action.guard.execution.transport` 显式选择：缺省不装配框架默认执行生产者和消费者。当前支持 `rabbitmq` 和 `rocketmq`（忽略大小写、不执行 `trim`），空值及其他值非法。RabbitMQ 的拓扑由应用配置负责；RocketMQ
+的 topic 由 Broker 管理并需预先创建或显式允许自动创建。选择后缺少对应适配器或客户端会启动报错；这是装配条件校验，不进行网络探活。
 
-自定义 `ActionExecutionMessageProducer` 的接入与覆盖机制保留，未选择默认传输时仍可使用；显式选择 `rabbitmq` 后仍须满足其装配条件。没有生产者时 Outbox 不发送，不会回退为本地执行；下面的 MQ
+自定义 `ActionExecutionMessageProducer` 的接入与覆盖机制保留，未选择默认传输时仍可使用；显式选择传输后仍须满足其装配条件。没有生产者时 Outbox 不发送，不会回退为本地执行；下面的 MQ
 派发与消费流程以可用消息通道为前提。
 
 ### 1. 能力层

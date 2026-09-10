@@ -8,7 +8,7 @@
 
 - 发布 Action
 - 写入 H2 或 MySQL 兼容存储状态
-- 发布到 RabbitMQ
+- 发布到 RabbitMQ 或 RocketMQ
 - 消费并执行 step
 - 最终进入 `SUCCESS`
 
@@ -16,16 +16,19 @@
 
 ### 模块选择
 
-| 需求 | 模块或实现 |
-| --- | --- |
-| 默认执行主链路 | `action-guard-spring-boot-starter`、`action-guard-adapter-rabbitmq`、`action-guard-store-mysql` |
-| 自定义业务动作 | 在应用中实现 `ActionStepHandler` Bean |
-| 站内信、短信、邮件 | `action-guard-adapter-notify`，并提供相应 Sender Bean |
-| IM 群创建、邀请、群消息 | `action-guard-adapter-im`，并提供相应 Sender Bean |
-| 状态查询与人工处理 | `action-guard-ops-api`；独立入口由 `action-guard-ops-web` 提供 |
-| 外部告警 | `action-guard-alert-webhook` |
+| 需求                    | 模块或实现                                                                                      |
+|-------------------------|-------------------------------------------------------------------------------------------------|
+| RabbitMQ 执行主链路     | `action-guard-spring-boot-starter`、`action-guard-adapter-rabbitmq`、`action-guard-store-mysql` |
+| RocketMQ 执行主链路     | `action-guard-spring-boot-starter`、`action-guard-adapter-rocketmq`、`action-guard-store-mysql` |
+| 自定义业务动作          | 在应用中实现 `ActionStepHandler` Bean                                                           |
+| 站内信、短信、邮件      | `action-guard-adapter-notify`，并提供相应 Sender Bean                                           |
+| IM 群创建、邀请、群消息 | `action-guard-adapter-im`，并提供相应 Sender Bean                                               |
+| 状态查询与人工处理      | `action-guard-ops-api`；独立入口由 `action-guard-ops-web` 提供                                  |
+| 外部告警                | `action-guard-alert-webhook`                                                                    |
 
 默认以当前服务器的 MySQL 加 RabbitMQ 演示，连接和密码配置见 [demo 说明](../../examples/action-guard-demo/README.md)。Kafka、Redis 当前不作为推荐主路径，选型时先核对实际实现。引入能力模块并不等于已经接入真实厂商服务。
+
+RocketMQ 可通过 demo 的 `rocketmq` profile 接入已部署的 NameServer；该 profile 不改变默认 RabbitMQ 演示配置。
 
 最小可运行组合建议：
 
@@ -43,6 +46,12 @@
   <dependency>
     <groupId>io.github.ljbclannad.actionguard</groupId>
     <artifactId>action-guard-adapter-rabbitmq</artifactId>
+    <version>${action-guard.version}</version>
+  </dependency>
+  <!-- 使用 RocketMQ 时，以此依赖替换 RabbitMQ 适配器即可 -->
+  <dependency>
+    <groupId>io.github.ljbclannad.actionguard</groupId>
+    <artifactId>action-guard-adapter-rocketmq</artifactId>
     <version>${action-guard.version}</version>
   </dependency>
   <dependency>
@@ -86,9 +95,10 @@ action:
 
 该值选择 JDBC/MyBatis 仓储，H2 测试同样适用。存储模块已提供运行时 `mysql-connector-j`，默认配置 `com.mysql.cj.jdbc.Driver` 和当前服务器连接信息。纯内存测试可配置 `memory`，不具备持久化保证。
 
-仅引入 RabbitMQ 适配器或配置连接不会启用默认执行生产者和消费者，必须显式选择 `rabbitmq`。示例拓扑由应用配置提供并按同一选择条件启用，用户自定义拓扑需自行添加启用条件。未配置时不影响其他业务使用 Spring
-Boot 的 `RabbitTemplate`，自定义消息生产者仍可接入；没有生产者时 Outbox 不发送，也不会自动本地执行。该选择仅支持 `rabbitmq`（忽略大小写、不去除首尾空格），空值及其他值非法；缺少适配器或 `RabbitTemplate`
-会启动报错，但配置校验不做网络探活。完整边界见 [执行传输选择](starter-config.md#执行传输选择)。
+仅引入适配器或配置连接不会启用默认执行生产者和消费者，必须显式选择 `rabbitmq` 或 `rocketmq`。RabbitMQ 示例拓扑由应用配置提供并按同一选择条件启用；RocketMQ topic 由 Broker 管理，需预先创建或明确允许自动创建。未配置时不影响其他业务使用
+Spring
+Boot 的 `RabbitTemplate`，自定义消息生产者仍可接入；没有生产者时 Outbox
+不发送，也不会自动本地执行。该选择忽略大小写但不去除首尾空格；缺少适配器或客户端会启动报错，但配置校验不做网络探活。完整边界见 [执行传输选择](starter-config.md#执行传输选择)。
 
 可以直接从模板复制：
 
