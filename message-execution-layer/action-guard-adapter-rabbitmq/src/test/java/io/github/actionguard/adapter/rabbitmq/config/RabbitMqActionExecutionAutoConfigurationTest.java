@@ -80,7 +80,7 @@ class RabbitMqActionExecutionAutoConfigurationTest {
                 })
                 .withPropertyValues("action.guard.store.type=memory", "action.guard.execution.transport=rabbitmq")
                 .run(context -> assertThat(context.getStartupFailure())
-                        .hasMessageContaining("需要启用 RabbitMqActionExecutionAutoConfiguration 自动配置"));
+                        .hasMessageContaining("需要启用对应的执行适配器自动配置"));
     }
 
     @Test

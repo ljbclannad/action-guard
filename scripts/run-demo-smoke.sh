@@ -15,7 +15,7 @@ echo "log file: $LOG_FILE"
 cd "$ROOT_DIR"
 
 if [[ "${ACTION_GUARD_SMOKE_BUILD_FIRST:-true}" == "true" ]]; then
-  mvn -q -pl examples/action-guard-demo -am compile
+  mvn -q -pl examples/action-guard-demo -am install -DskipTests
 fi
 
 if [[ -n "$SMOKE_PROFILE" ]]; then
