@@ -4,10 +4,11 @@ import io.github.actionguard.api.runtime.ActionAlertEvent;
 import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.core.model.ActionInstance;
+import io.github.actionguard.core.model.ActionOutbox;
+import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.model.ActionStepStatus;
-import io.github.actionguard.core.runtime.state.ActionTransitionContext;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
 import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,21 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ActionObservabilityServiceTest {
+
+    @Test
+    void shouldRejectNullOptionalContainers() {
+        assertThatThrownBy(() -> new ActionObservabilityService(
+                null, Optional.empty(), Clock.systemUTC()
+        )).isInstanceOf(NullPointerException.class)
+                .hasMessage("actionAlertPublisher must not be null");
+        assertThatThrownBy(() -> new ActionObservabilityService(
+                Optional.empty(), null, Clock.systemUTC()
+        )).isInstanceOf(NullPointerException.class)
+                .hasMessage("actionMetricsRecorder must not be null");
+    }
 
     @Test
     void shouldPublishRetryExhaustedAlertAndMetric() {
@@ -143,6 +157,59 @@ class ActionObservabilityServiceTest {
 
         assertThat(metricsRecorder.counters)
                 .containsEntry("action.guard.action.transition|{actionName=order-cancel-flow, event=STEP_FAILED_RETRYABLE, fromStatus=DISPATCHING, stepType=unknown, toStatus=RETRYING}", 1L);
+    }
+
+    @Test
+    void shouldPublishOutboxDeadAlertAndLowCardinalityMetric() {
+        CapturingActionAlertPublisher alertPublisher = new CapturingActionAlertPublisher();
+        CapturingActionMetricsRecorder metricsRecorder = new CapturingActionMetricsRecorder();
+        ActionObservabilityService service = new ActionObservabilityService(
+                Optional.of(alertPublisher),
+                Optional.of(metricsRecorder),
+                Clock.fixed(Instant.parse("2026-09-11T08:00:00Z"), ZoneOffset.UTC)
+        );
+        ActionOutbox outbox = new ActionOutbox(
+                "outbox-1", "act-1", "ACTION_EXECUTE", "dispatch-1", ActionOutboxStatus.DEAD,
+                Instant.parse("2026-09-11T07:00:00Z"), 4, 3, 5,
+                Instant.parse("2026-09-11T06:00:00Z"), Instant.parse("2026-09-11T08:00:00Z")
+        );
+
+        service.outboxDead(outbox, 3, "broker password must not become a tag");
+
+        assertThat(alertPublisher.events).singleElement().satisfies(alert -> {
+            assertThat(alert.type().name()).isEqualTo("OUTBOX_DEAD");
+            assertThat(alert.level().name()).isEqualTo("HIGH");
+            assertThat(alert.actionInstanceId()).isEqualTo("act-1");
+            assertThat(alert.details()).containsEntry("outboxId", "outbox-1")
+                    .containsEntry("dispatchId", "dispatch-1")
+                    .containsEntry("topic", "ACTION_EXECUTE")
+                    .containsEntry("status", "DEAD")
+                    .containsEntry("deliveryAttemptCount", "3")
+                    .containsEntry("maxDeliveryAttempts", "3");
+        });
+        assertThat(metricsRecorder.counters).containsEntry(
+                "action.guard.outbox.delivery.dead|{actionName=unknown, reason=delivery_exhausted, stepType=unknown}", 1L);
+        assertThat(metricsRecorder.counters.keySet()).noneMatch(key -> key.contains("outbox-1")
+                || key.contains("dispatch-1") || key.contains("ACTION_EXECUTE") || key.contains("broker password"));
+    }
+
+    @Test
+    void shouldRecordRecoveredOutboxesAndPhaseFailuresWithLowCardinalityTags() {
+        CapturingActionMetricsRecorder metricsRecorder = new CapturingActionMetricsRecorder();
+        ActionObservabilityService service = new ActionObservabilityService(
+                Optional.empty(),
+                Optional.of(metricsRecorder),
+                Clock.systemUTC()
+        );
+
+        service.outboxRecoverySucceeded(2);
+        service.outboxRecoverySucceeded(0);
+        service.recoveryPhaseFailed("outbox", new IllegalStateException("database password must not become a tag"));
+
+        assertThat(metricsRecorder.counters)
+                .containsEntry("action.guard.outbox.recovery.succeeded|{actionName=unknown, stepType=unknown}", 2L)
+                .containsEntry("action.guard.recovery.phase.failed|{actionName=unknown, phase=outbox, stepType=unknown}", 1L);
+        assertThat(metricsRecorder.counters.keySet()).noneMatch(key -> key.contains("database password"));
     }
 
     private static final class CapturingActionAlertPublisher implements ActionAlertPublisher {

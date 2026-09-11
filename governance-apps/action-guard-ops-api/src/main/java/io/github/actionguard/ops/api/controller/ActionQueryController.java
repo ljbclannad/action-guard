@@ -4,6 +4,7 @@ import io.github.actionguard.ops.api.model.ActionDetailView;
 import io.github.actionguard.ops.api.model.ActionListItem;
 import io.github.actionguard.ops.api.model.ActionQueryFilter;
 import io.github.actionguard.ops.api.model.ActionTimelineEventView;
+import io.github.actionguard.ops.api.model.ActionOutboxView;
 import io.github.actionguard.ops.api.model.CompensationLogView;
 import io.github.actionguard.ops.api.model.ConsumeDetailView;
 import io.github.actionguard.ops.api.model.PageResult;
@@ -59,6 +60,11 @@ public class ActionQueryController {
     @GetMapping("/{actionInstanceId}/compensations")
     public List<CompensationLogView> compensations(@PathVariable String actionInstanceId) {
         return actionQueryService.compensations(actionInstanceId);
+    }
+
+    @GetMapping("/{actionInstanceId}/outboxes")
+    public List<ActionOutboxView> outboxes(@PathVariable String actionInstanceId) {
+        return actionQueryService.outboxes(actionInstanceId);
     }
 
     @GetMapping("/{actionInstanceId}/timeline")

@@ -8,6 +8,6 @@ public enum ActionOutboxStatus {
     CLAIMED,
     /** 消息发送成功且发布状态已落库，仍存在 MQ 与数据库之间的重复投递窗口。 */
     DONE,
-    /** 不再正常投递的状态；当前统一投递器发送失败回退 NEW，不以此状态结束传输重试。 */
+    /** 消息发送失败累计至 deliveryAttemptCount 上限后的投递终态；恢复扫描不会重新投递。 */
     DEAD
 }

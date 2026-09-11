@@ -7,5 +7,6 @@ public enum ActionAlertType {
     CONSUME_FAILURE,
     DEAD_LETTER,
     OUTBOX_PUBLISH_FAILED,
+    OUTBOX_DEAD,
     ACTION_STUCK
 }

@@ -228,13 +228,15 @@ public class ActionGuardAutoConfiguration {
             ActionOutboxRecoveryService actionOutboxRecoveryService,
             Optional<ActionCompensationService> actionCompensationService,
             Optional<ActionStuckDetectionService> actionStuckDetectionService,
+            ActionObservabilityService actionObservabilityService,
             ActionGuardProperties properties) {
         // scheduler 只负责周期性触发恢复、补偿与卡住检测，不承载业务决策本身，避免把调度器做成另一套 runtime。
         return new ActionOutboxRecoveryScheduler(
                 actionOutboxRecoveryService,
                 actionCompensationService,
                 actionStuckDetectionService,
-                properties.getRecovery());
+                properties.getRecovery(),
+                actionObservabilityService);
     }
 
     @Bean

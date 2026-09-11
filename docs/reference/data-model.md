@@ -43,7 +43,7 @@
 
 表示一次已发布的 Action 执行实例。
 
-建议字段：
+当前 Schema 字段：
 
 | Field | Purpose |
 | --- | --- |
@@ -119,30 +119,30 @@
 | `id` | 主键 |
 | `action_instance_id` | 所属 Action |
 | `topic` | 逻辑任务类型，例如 `ACTION_EXECUTE` 或 `ACTION_COMPENSATE` |
+| `dispatch_id` | 逻辑投递标识；传输重发保持不变，步骤推进或业务重试时重新生成 |
 | `status` | `NEW`、`CLAIMED`、`DONE`、`DEAD` |
 | `available_at` | 最早可派发时间 |
-| `delivery_attempt_count` | 仅消息发送失败次数，达到上限后不再自动投递 |
-| `lease_owner` | worker 或节点标识 |
-| `lease_expires_at` | claim 过期时间 |
-| `attempt_count` | 派发尝试次数 |
-| `last_error_message` | dispatcher 层失败原因 |
+| `attempt_count` | 投递失败回退与业务重试调度都会递增的累计计数，不是纯消息发送失败次数 |
+| `delivery_attempt_count` | 仅消息发送失败次数，达到上限后 Outbox 进入 `DEAD` |
+| `version` | 用于抢占和并发更新的乐观锁版本 |
 | `created_at` | 创建时间 |
-| `updated_at` | 最近一次变更时间 |
+| `updated_at` | 最近一次变更时间；恢复扫描据此判断 `CLAIMED` 记录能否被接管 |
 
 索引建议：
 
 - 对 `(status, available_at)` 建查询索引
-- 对 `lease_expires_at` 建查询索引
+- 对 `(status, available_at, created_at)` 建恢复扫描索引
 - 对 `action_instance_id` 建查询索引
 
 规则：
 
 - 插入 `action_outbox` 必须与 `action_instance` 在同一事务中完成
-- 已被 claim 的记录在 lease 过期后应允许重新 claim
+- 已被 `CLAIMED` 的记录在 `updated_at` 超过 claim timeout 后应允许重新 claim；当前 Schema 没有 `lease_owner` 或 `lease_expires_at`
 - `DONE` 表示消息生产者已返回发送成功且发布状态已落库，不表示消息已被消费，也不等于整个 Action 已经成功完成
+- `DEAD` 表示消息发送失败累计至实际配置的最大 `delivery_attempt_count` 后的投递终态；恢复扫描不会再次选中或重新发送该记录
 
-当前实现中，三条投递路径发送失败时均在原有 `attempt_count` 上加一，成功发送不增加该值。
-步骤级业务重试调度仍沿用现有逻辑加一，因此该字段是累计计数，不应直接当作纯 MQ 发送次数；`delivery_attempt_count` 才是投递死信阈值的依据。达到 10 次后状态进入 `DEAD`，不会再被恢复扫描选中。
+当前实现中，三条投递路径发送失败时均在原有 `attempt_count` 与 `delivery_attempt_count` 上加一，成功发送不增加这两个值。当前表不保存最近投递错误、逐次投递历史或告警送达记录；需要这类信息时必须另行设计持久化事件、尝试日志或通知 Outbox，不能从当前快照推断。
+步骤级业务重试调度仍沿用现有逻辑加一，因此该字段是累计计数，不应直接当作纯 MQ 发送次数；`delivery_attempt_count` 才是投递终态阈值的依据。
 
 ## action_consume_log
 

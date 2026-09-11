@@ -16,12 +16,16 @@ import java.util.Optional;
 public class ActionOutboxDispatcher {
 
     private final ActionOutboxRepository repository;
-    private final Optional<ActionExecutionMessageProducer> producer;
+    private final ActionExecutionMessageProducer producer;
     private final ActionObservabilityService observability;
     private final Clock clock;
     private final int maxDeliveryAttempts;
     private final Duration retryBackoff;
 
+    /**
+     * 保留 Optional 作为兼容构造器入口；可选依赖会在构造阶段立即解包，不进入运行时状态机。
+     */
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public ActionOutboxDispatcher(
             ActionOutboxRepository repository,
             Optional<ActionExecutionMessageProducer> producer,
@@ -31,6 +35,10 @@ public class ActionOutboxDispatcher {
         this(repository, producer, observability, clock, 10, Duration.ofSeconds(5));
     }
 
+    /**
+     * 保留 Optional 作为兼容构造器入口；可选依赖会在构造阶段立即解包，不进入运行时状态机。
+     */
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public ActionOutboxDispatcher(
             ActionOutboxRepository repository,
             Optional<ActionExecutionMessageProducer> producer,
@@ -40,7 +48,7 @@ public class ActionOutboxDispatcher {
             Duration retryBackoff
     ) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
-        this.producer = Objects.requireNonNull(producer, "producer must not be null");
+        this.producer = Objects.requireNonNull(producer, "producer must not be null").orElse(null);
         this.observability = Objects.requireNonNull(observability, "observability must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.maxDeliveryAttempts = Math.max(1, maxDeliveryAttempts);
@@ -52,7 +60,7 @@ public class ActionOutboxDispatcher {
     /** CLAIMED 候选只能由恢复扫描在确认租约超时后传入。 */
     public boolean dispatch(ActionOutbox candidate, int maxAttempts) {
         // 仅处理已到期、可投递的 NEW 记录，或由恢复扫描接管的超时 CLAIMED 记录。
-        if (producer.isEmpty() || (candidate.status() != ActionOutboxStatus.NEW
+        if (producer == null || (candidate.status() != ActionOutboxStatus.NEW
                 && candidate.status() != ActionOutboxStatus.CLAIMED)
                 || candidate.availableAt().isAfter(clock.instant()) || maxAttempts <= 0) {
             return false;
@@ -70,14 +78,14 @@ public class ActionOutboxDispatcher {
             }
             try {
                 // 只有抢占成功的快照才允许发送，避免多个节点同时投递同一条 Outbox。
-                producer.orElseThrow().publish(claimed);
+                producer.publish(claimed);
             } catch (RuntimeException ex) {
                 int deliveryAttemptCount = claimed.deliveryAttemptCount() + 1;
                 try {
                     if (deliveryAttemptCount >= maxDeliveryAttempts) {
                         current = save(claimed, ActionOutboxStatus.DEAD, claimed.availableAt(),
                                 claimed.attemptCount() + 1, deliveryAttemptCount);
-                        observability.outboxPublishFailed(current, deliveryAttemptCount, ex.getMessage());
+                        observability.outboxDead(current, maxDeliveryAttempts, ex.getMessage());
                         return false;
                     }
                     // 当前调用内的同步重试保持可立即派发；耗尽后再退避，避免恢复扫描持续冲击故障通道。

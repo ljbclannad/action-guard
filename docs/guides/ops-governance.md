@@ -16,6 +16,7 @@
 - Action 详情查询
 - Step 详情查询
 - 消费明细查询
+- Outbox 投递诊断查询
 - 审计日志查询
 - 人工重试
 - 跳过当前步骤
@@ -90,6 +91,7 @@
 
 - 当前还没有暴露已解析的 definition version
 - 详情响应当前还不包含 outbox 状态
+- Outbox 投递状态通过独立的 `GET /api/actions/{actionInstanceId}/outboxes` 查询，避免将消息投递状态与 Action 完成状态混为一谈
 - 审计时间线通过单独的审计日志接口查询
 - 补偿时间线通过单独的补偿日志接口查询
 
@@ -120,6 +122,16 @@
 
 - 当前使用 attempt count 作为 delivery 次数的近似代理
 - 治理响应里还没有单独建模 dead-letter 状态
+
+### Outbox 投递诊断
+
+通过 `GET /api/actions/{actionInstanceId}/outboxes` 查询某个 Action 当前关联的 Outbox 记录。响应按 `createdAt`、`id` 升序返回，字段包括 `id`、`topic`、`dispatchId`、`status`、`availableAt`、`attemptCount`、`deliveryAttemptCount`、`version`、`createdAt` 和 `updatedAt`。
+
+- `DONE` 表示消息发送成功且 Outbox 状态已落库，不代表 consumer 已处理消息或 Action 已进入 `SUCCESS`
+- `NEW` 表示待投递记录；是否会在下一次扫描处理仍取决于 `availableAt`
+- `CLAIMED` 是读取瞬间已被投递方抢占的状态，单次快照不能单独证明任务已卡死；恢复扫描会结合 `updatedAt` 和 claim timeout 判断能否接管
+- `attemptCount` 是投递失败回退与业务重试调度都会累加的累计计数，不能解释为纯消息发送失败次数
+- `deliveryAttemptCount` 才是仅消息发送失败次数；`version` 是乐观锁版本，不是重试次数
 
 ## 当前支持的人工操作
 
@@ -220,15 +232,20 @@
 - `CONSUME_FAILURE`
 - `DEAD_LETTER`
 - `OUTBOX_PUBLISH_FAILED`
+- `OUTBOX_DEAD`
 - `ACTION_STUCK`
 
 如果引入 `action-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*`，这些事件会被直接投递到外部 webhook。
+
+`OUTBOX_PUBLISH_FAILED` 表示一次 dispatch 调用中的发送失败或即时重试耗尽，不代表该记录已停止自动投递。`OUTBOX_DEAD` 仅在 Outbox 使用乐观锁成功转为 `DEAD` 后发布，表示 `deliveryAttemptCount` 已达到实际配置的最大投递次数；告警详情携带 Outbox、dispatch 和次数关联信息，可结合 `GET /api/actions/{actionInstanceId}/outboxes` 查询当前快照定位。
 
 ### 与事务的关系
 
 在 Spring 实际事务内产生的告警与指标延后到提交成功后发送，事务回滚时不发送，避免记录未提交的执行结果。提交后的监控通道异常会记录警告日志，不改变已提交状态，也不阻断后续 Outbox 投递。
 
-这类通知仍同步执行在提交回调中，不是持久化通知队列；进程退出可能导致通知丢失，外部监控实现应设置合理超时。无事务调用保留即时发送及原有异常传播行为。
+这类通知仍同步执行在提交回调中，不是持久化通知队列；进程退出可能导致通知丢失，外部监控实现应设置合理超时。无事务调用也会即时尝试发送，但出口异常只记录警告日志，不会反向破坏已完成的状态转换。
+
+`OUTBOX_DEAD` 采用“成功状态转换后、当前进程尝试一次”的 best-effort 语义：乐观锁确保同一次 `DEAD` 转换只有成功更新方尝试告警，但不保证 webhook 已送达；若 `DEAD` 落库后进程在通知前退出，仍可能漏报。跨重启、跨节点的可靠通知投递需要后续独立的持久化通知 Outbox 设计。
 
 ### 当前内建 metrics
 
@@ -244,7 +261,10 @@ starter 默认会注册内存版 recorder；如果你要接入 Micrometer、Prom
 - `action.guard.consume.failed`
 - `action.guard.dead.letter`
 - `action.guard.outbox.publish.failed`
+- `action.guard.outbox.delivery.dead`
 - `action.guard.action.stuck`
+- `action.guard.outbox.recovery.succeeded`
+- `action.guard.recovery.phase.failed`
 
 #### 2. 运行结果计数
 
@@ -272,6 +292,8 @@ starter 默认会注册内存版 recorder；如果你要接入 Micrometer、Prom
 - `command`
 
 并不是每个指标都会带所有 tag。
+
+`action.guard.outbox.recovery.succeeded` 是当前 JVM 的成功恢复 Outbox 数量；`action.guard.recovery.phase.failed` 以有限的 `phase=outbox|compensation|stuck` 标记当前 JVM 的恢复阶段异常。它们都是进程内 counter，不能作为 Broker、数据库、其他节点或整个集群健康的结论。
 
 例如：
 
@@ -371,6 +393,7 @@ management:
 - 查询 Action 详情
 - 查询 Step 详情列表
 - 查询消息消费详情列表
+- 查询 Action 关联的 Outbox 投递诊断
 - 人工重试
 - 跳过 Step
 - 取消 Action

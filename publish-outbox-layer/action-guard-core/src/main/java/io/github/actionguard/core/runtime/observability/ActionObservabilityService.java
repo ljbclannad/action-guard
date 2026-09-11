@@ -7,6 +7,7 @@ import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
+import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
 import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -22,17 +23,23 @@ import java.time.Duration;
 public class ActionObservabilityService {
 
     private static final System.Logger LOGGER = System.getLogger(ActionObservabilityService.class.getName());
-    private final Optional<ActionAlertPublisher> actionAlertPublisher;
-    private final Optional<ActionMetricsRecorder> actionMetricsRecorder;
+    private final ActionAlertPublisher actionAlertPublisher;
+    private final ActionMetricsRecorder actionMetricsRecorder;
     private final Clock clock;
 
+    /**
+     * 保留 Optional 作为兼容构造器入口；可选通道会在构造阶段立即解包，不进入运行时通知路径。
+     */
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public ActionObservabilityService(
             Optional<ActionAlertPublisher> actionAlertPublisher,
             Optional<ActionMetricsRecorder> actionMetricsRecorder,
             Clock clock
     ) {
-        this.actionAlertPublisher = Objects.requireNonNull(actionAlertPublisher, "actionAlertPublisher must not be null");
-        this.actionMetricsRecorder = Objects.requireNonNull(actionMetricsRecorder, "actionMetricsRecorder must not be null");
+        this.actionAlertPublisher = Objects.requireNonNull(actionAlertPublisher, "actionAlertPublisher must not be null")
+                .orElse(null);
+        this.actionMetricsRecorder = Objects.requireNonNull(actionMetricsRecorder, "actionMetricsRecorder must not be null")
+                .orElse(null);
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -128,10 +135,63 @@ public class ActionObservabilityService {
                 null,
                 outbox.actionInstanceId(),
                 null,
-                outbox.topic(),
+                null,
                 details
         );
-        increment("action.guard.outbox.publish.failed", "unknown", outbox.topic());
+        increment("action.guard.outbox.publish.failed", "unknown", "unknown");
+    }
+
+    /**
+     * 在 Outbox 成功进入投递终态后发送一次当前进程内的尽力而为通知。
+     *
+     * <p>该通知不具备持久化、重试或外部送达回执语义。</p>
+     */
+    public void outboxDead(ActionOutbox outbox, int maxDeliveryAttempts, String reason) {
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("outboxId", outbox.id());
+        details.put("dispatchId", outbox.dispatchId());
+        details.put("topic", outbox.topic());
+        details.put("status", ActionOutboxStatus.DEAD.name());
+        details.put("deliveryAttemptCount", String.valueOf(outbox.deliveryAttemptCount()));
+        details.put("maxDeliveryAttempts", String.valueOf(maxDeliveryAttempts));
+        details.put("reason", nullSafe(reason));
+        publishEvent(
+                ActionAlertType.OUTBOX_DEAD,
+                ActionAlertLevel.HIGH,
+                "action outbox delivery dead",
+                reason,
+                null,
+                outbox.actionInstanceId(),
+                null,
+                null,
+                details
+        );
+        increment("action.guard.outbox.delivery.dead", Map.of(
+                "actionName", "unknown",
+                "stepType", "unknown",
+                "reason", "delivery_exhausted"
+        ));
+    }
+
+    /** 记录当前进程在恢复扫描中成功完成投递的 Outbox 数量。 */
+    public void outboxRecoverySucceeded(int recoveredCount) {
+        for (int index = 0; index < recoveredCount; index++) {
+            increment("action.guard.outbox.recovery.succeeded", "unknown", "unknown");
+        }
+    }
+
+    /**
+     * 记录恢复调度阶段异常。
+     *
+     * <p>异常详情只写入日志，避免异常消息成为高基数指标标签。</p>
+     */
+    public void recoveryPhaseFailed(String phase, RuntimeException exception) {
+        LOGGER.log(System.Logger.Level.WARNING, "Action Guard recovery phase failed: " + phase, exception);
+        increment("action.guard.recovery.phase.failed", Map.of(
+                "actionName", "unknown",
+                "stepType", "unknown",
+                "phase", nullSafe(phase)
+        ));
     }
 
     public void actionStuck(ActionInstance actionInstance, Duration timeout) {
@@ -247,7 +307,11 @@ public class ActionObservabilityService {
                 clock.instant(),
                 Map.copyOf(details)
         );
-        afterCommitOrNow(() -> actionAlertPublisher.ifPresent(publisher -> publisher.publish(event)));
+        afterCommitOrNow(() -> {
+            if (actionAlertPublisher != null) {
+                actionAlertPublisher.publish(event);
+            }
+        });
         increment("action.guard.alert.published", actionName, stepType);
     }
 
@@ -260,7 +324,11 @@ public class ActionObservabilityService {
 
     private void increment(String metricName, Map<String, String> tags) {
         // 指标同样允许缺省，以便框架在没有接入外部监控系统时仍能独立运行。
-        afterCommitOrNow(() -> actionMetricsRecorder.ifPresent(recorder -> recorder.increment(metricName, tags)));
+        afterCommitOrNow(() -> {
+            if (actionMetricsRecorder != null) {
+                actionMetricsRecorder.increment(metricName, tags);
+            }
+        });
     }
 
     private void afterCommitOrNow(Runnable notification) {
@@ -278,7 +346,12 @@ public class ActionObservabilityService {
                 }
             });
         } else {
-            notification.run();
+            try {
+                notification.run();
+            } catch (RuntimeException ex) {
+                // 无事务调用同样不能让可选观测出口反向破坏已经完成的状态转换。
+                LOGGER.log(System.Logger.Level.WARNING, "告警或指标发送失败", ex);
+            }
         }
     }
 
