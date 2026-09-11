@@ -1,6 +1,5 @@
 package io.github.actionguard.ops.api.config;
 
-import io.github.actionguard.core.repository.ActionGovernancePolicyRepository;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
@@ -11,9 +10,11 @@ import io.github.actionguard.core.runtime.observability.ActionObservabilityServi
 import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
+import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
 import io.github.actionguard.ops.api.repository.jdbc.JdbcActionAuditLogRepository;
 import io.github.actionguard.ops.api.repository.jdbc.JdbcActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.jdbc.JdbcActionOpsQueryRepository;
+import io.github.actionguard.ops.api.repository.jdbc.JdbcActionOutboxQueryRepository;
 import io.github.actionguard.ops.api.service.ActionAuditService;
 import io.github.actionguard.ops.api.service.ActionCommandService;
 import io.github.actionguard.ops.api.service.ActionQueryService;
@@ -39,6 +40,11 @@ public class ActionOpsApiConfiguration {
     }
 
     @Bean
+    ActionOutboxQueryRepository actionOutboxQueryRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcActionOutboxQueryRepository(jdbcTemplate);
+    }
+
+    @Bean
     ActionCompensationLogQueryRepository actionCompensationLogQueryRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcActionCompensationLogQueryRepository(jdbcTemplate);
     }
@@ -51,10 +57,16 @@ public class ActionOpsApiConfiguration {
     @Bean
     ActionQueryService actionQueryService(
             ActionOpsQueryRepository actionOpsQueryRepository,
+            ActionOutboxQueryRepository actionOutboxQueryRepository,
             ActionCompensationLogQueryRepository actionCompensationLogQueryRepository,
             ActionTransitionLogRepository actionTransitionLogRepository
     ) {
-        return new ActionQueryService(actionOpsQueryRepository, actionCompensationLogQueryRepository, actionTransitionLogRepository);
+        return new ActionQueryService(
+                actionOpsQueryRepository,
+                actionOutboxQueryRepository,
+                actionCompensationLogQueryRepository,
+                actionTransitionLogRepository
+        );
     }
 
     @Bean

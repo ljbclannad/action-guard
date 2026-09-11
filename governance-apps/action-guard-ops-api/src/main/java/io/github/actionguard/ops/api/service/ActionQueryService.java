@@ -4,6 +4,7 @@ import io.github.actionguard.ops.api.model.ActionDetailView;
 import io.github.actionguard.ops.api.model.ActionListItem;
 import io.github.actionguard.ops.api.model.ActionQueryFilter;
 import io.github.actionguard.ops.api.model.ActionTimelineEventView;
+import io.github.actionguard.ops.api.model.ActionOutboxView;
 import io.github.actionguard.ops.api.model.CompensationLogView;
 import io.github.actionguard.ops.api.model.ConsumeDetailView;
 import io.github.actionguard.ops.api.model.PageResult;
@@ -12,6 +13,7 @@ import io.github.actionguard.core.model.ActionTransitionLog;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
+import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,15 +22,18 @@ import java.util.List;
 public class ActionQueryService {
 
     private final ActionOpsQueryRepository repository;
+    private final ActionOutboxQueryRepository actionOutboxQueryRepository;
     private final ActionCompensationLogQueryRepository compensationLogQueryRepository;
     private final ActionTransitionLogRepository actionTransitionLogRepository;
 
     public ActionQueryService(
             ActionOpsQueryRepository repository,
+            ActionOutboxQueryRepository actionOutboxQueryRepository,
             ActionCompensationLogQueryRepository compensationLogQueryRepository,
             ActionTransitionLogRepository actionTransitionLogRepository
     ) {
         this.repository = repository;
+        this.actionOutboxQueryRepository = actionOutboxQueryRepository;
         this.compensationLogQueryRepository = compensationLogQueryRepository;
         this.actionTransitionLogRepository = actionTransitionLogRepository;
     }
@@ -67,6 +72,10 @@ public class ActionQueryService {
 
     public List<CompensationLogView> compensations(String actionInstanceId) {
         return compensationLogQueryRepository.findByActionInstanceId(actionInstanceId);
+    }
+
+    public List<ActionOutboxView> outboxes(String actionInstanceId) {
+        return actionOutboxQueryRepository.findByActionInstanceId(actionInstanceId);
     }
 
     public List<ActionTimelineEventView> timeline(String actionInstanceId) {

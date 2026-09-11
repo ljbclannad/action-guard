@@ -11,6 +11,7 @@ import io.github.actionguard.core.runtime.observability.ActionObservabilityServi
 import io.github.actionguard.ops.api.service.ActionAuditService;
 import io.github.actionguard.ops.api.service.ActionCommandService;
 import io.github.actionguard.ops.api.service.ActionQueryService;
+import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -36,6 +37,7 @@ class ActionOpsApiConfigurationTest {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(ActionAuditService.class);
             assertThat(context).hasSingleBean(ActionQueryService.class);
+            assertThat(context).hasSingleBean(ActionOutboxQueryRepository.class);
             assertThat(context).hasSingleBean(ActionCommandService.class);
         });
     }
@@ -97,6 +99,21 @@ class ActionOpsApiConfigurationTest {
                         payload_json text,
                         last_error_code varchar(128),
                         last_error_message text,
+                        version int not null default 0,
+                        created_at timestamp not null,
+                        updated_at timestamp not null
+                    )
+                    """);
+            jdbcTemplate.execute("""
+                    create table if not exists action_outbox (
+                        id varchar(64) primary key,
+                        action_instance_id varchar(64) not null,
+                        topic varchar(64) not null,
+                        dispatch_id varchar(64) not null,
+                        status varchar(32) not null,
+                        available_at timestamp not null,
+                        attempt_count int not null,
+                        delivery_attempt_count int not null default 0,
                         version int not null default 0,
                         created_at timestamp not null,
                         updated_at timestamp not null

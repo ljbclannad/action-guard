@@ -28,6 +28,14 @@ class ActionOutboxDispatcherTest {
             Optional.of(alerts::add), Optional.empty(), clock);
 
     @Test
+    void shouldRejectNullProducerOptional() {
+        assertThatThrownBy(() -> new ActionOutboxDispatcher(
+                repository, null, observability, clock
+        )).isInstanceOf(NullPointerException.class)
+                .hasMessage("producer must not be null");
+    }
+
+    @Test
     void shouldClaimBeforeSendingAndRejectStaleCandidate() {
         ActionOutbox candidate = candidate(now);
         AtomicInteger sent = new AtomicInteger();
@@ -105,6 +113,49 @@ class ActionOutboxDispatcherTest {
         ActionOutbox persisted = repository.findById(candidate.id()).orElseThrow();
         assertThat(persisted.status()).isEqualTo(ActionOutboxStatus.DEAD);
         assertThat(persisted.deliveryAttemptCount()).isEqualTo(2);
+        assertThat(alerts).filteredOn(alert -> alert.type().name().equals("OUTBOX_DEAD"))
+                .singleElement().satisfies(alert -> {
+            assertThat(alert.type().name()).isEqualTo("OUTBOX_DEAD");
+            assertThat(alert.level().name()).isEqualTo("HIGH");
+            assertThat(alert.actionInstanceId()).isEqualTo(candidate.actionInstanceId());
+            assertThat(alert.details()).containsEntry("outboxId", candidate.id())
+                    .containsEntry("dispatchId", candidate.dispatchId())
+                    .containsEntry("topic", candidate.topic())
+                    .containsEntry("status", "DEAD")
+                    .containsEntry("deliveryAttemptCount", "2")
+                    .containsEntry("maxDeliveryAttempts", "2")
+                    .containsEntry("reason", "发送失败");
+        });
+
+        assertThat(dispatcher.dispatch(persisted, 1)).isFalse();
+        assertThat(alerts).filteredOn(alert -> alert.type().name().equals("OUTBOX_DEAD")).hasSize(1);
+    }
+
+    @Test
+    void shouldPersistDeadWhenObservabilityExitsFail() {
+        ActionOutbox candidate = candidate(now);
+        ActionObservabilityService failingObservability = new ActionObservabilityService(
+                Optional.of(event -> {
+                    throw new IllegalStateException("alert channel failed");
+                }),
+                Optional.of((metricName, tags) -> {
+                    throw new IllegalStateException("metrics channel failed");
+                }),
+                clock
+        );
+        ActionOutboxDispatcher dispatcher = new ActionOutboxDispatcher(
+                repository,
+                Optional.of(outbox -> {
+                    throw new IllegalStateException("发送失败");
+                }),
+                failingObservability,
+                clock,
+                1,
+                java.time.Duration.ZERO
+        );
+
+        assertThat(dispatcher.dispatch(candidate, 1)).isFalse();
+        assertThat(repository.findById(candidate.id()).orElseThrow().status()).isEqualTo(ActionOutboxStatus.DEAD);
     }
 
     @Test

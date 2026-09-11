@@ -209,4 +209,34 @@ mvn -pl examples/action-guard-demo -am \
 
 测试使用 H2 内存库、真实执行与治理服务、MockMvc 和替换的消息发送端，显式驱动执行回调，验证重试到期约束、前序步骤不重跑、人工跳过与审计落库。测试不连接 RabbitMQ，不代表真实 MySQL / RabbitMQ 或进程中断恢复验证。
 
-本批覆盖自动重试和等待重试期间的人工跳过。重试耗尽后的人工恢复、补偿、MQ 中断和进程停机恢复尚未纳入此演示。
+本批覆盖自动重试和等待重试期间的人工跳过。重试耗尽后的人工恢复、补偿和进程停机恢复尚未纳入此演示。
+
+## RocketMQ 投递失败后的自动恢复
+
+隔离测试覆盖“测试客户端发送异常 → Outbox 回退 `NEW` → 后台恢复调度器自动补发 → 消费执行成功”的完整状态链路：
+
+```bash
+mvn -pl examples/action-guard-demo -am \
+  -Dtest=DemoRocketMqRecoveryTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+该测试使用 H2 和测试 `DefaultMQProducer`，不会连接 RocketMQ，也不会加载 `.local/action-guard.env`。它断言发送失败不会执行 Handler、恢复后的同一 Outbox 保留 `dispatchId`、`DONE` 与 Action `SUCCESS` 分别发生，并重复交付成功消息以验证消费去重。它证明的是**发送异常后的自动恢复**，不是 Broker 宕机、网络断连或 RocketMQ SDK 重连的验证；消费去重也不能替代业务 Handler 或下游系统的幂等性。
+
+### 默认禁用的真实 RocketMQ 收发入口
+
+`DemoRocketMqRecoveryAcceptanceTest` 默认跳过，不会创建 RocketMQ 客户端或连接外部服务。只有显式设置开关和全部专用参数后才会执行：
+
+```bash
+mvn -pl examples/action-guard-demo -am \
+  -Dtest=DemoRocketMqRecoveryAcceptanceTest \
+  -Daction.guard.acceptance.rocketmq.enabled=true \
+  -Daction.guard.acceptance.rocketmq.name-server='专用 NameServer 地址' \
+  -Daction.guard.acceptance.rocketmq.topic='专用 topic' \
+  -Daction.guard.acceptance.rocketmq.producer-group='专用 producer group' \
+  -Daction.guard.acceptance.rocketmq.consumer-group='专用 consumer group' \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+启用后缺少任一参数会在 Spring 上下文初始化阶段失败，不会回退到 `application-rocketmq.yml` 中的默认远程地址。该入口使用独立 H2 数据库；topic 和 group 必须由操作者在专用环境中预先准备，测试不会创建或删除共享资源。它在测试进程内仅注入一次 producer 发送异常，随后由真实 scheduler、producer、Broker 和 consumer 完成补发与执行，因此它验证的是**真实 RocketMQ 收发 + 测试侧发送失败注入**，不代表网络断连、Broker 宕机或 RocketMQ SDK 重连验证。
+
+真实 RocketMQ 验收必须使用专用环境和独立的数据库、topic、producer group、consumer group。先正常启动并预热测试实例，再只阻断该实例到实际 Broker 的网络；发布 Action 并确认 Outbox 回退 `NEW`，在进入 `DEAD` 前恢复网络，随后不人工重投、不修改数据库、不重启应用，等待恢复调度器完成投递和消费。不要停止共享 Broker，也不要只阻断 NameServer：客户端可能已缓存实际 Broker 路由。真实网络故障验证需要在明确目标地址、隔离范围和故障注入方式后单独授权执行。

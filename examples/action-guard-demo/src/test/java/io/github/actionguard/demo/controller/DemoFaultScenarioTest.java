@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.username=sa", "spring.datasource.password=",
         "spring.rabbitmq.listener.simple.auto-startup=false",
         "spring.rabbitmq.listener.direct.auto-startup=false",
-        "action.guard.recovery.enabled=false"
+        "action.guard.recovery.enabled=false",
+        "demo.runner.enabled=false"
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("fault-demo")

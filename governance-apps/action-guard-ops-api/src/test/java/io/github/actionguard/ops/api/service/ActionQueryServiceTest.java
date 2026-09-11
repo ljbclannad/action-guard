@@ -7,11 +7,13 @@ import io.github.actionguard.core.model.ActionTransitionLog;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
 import io.github.actionguard.ops.api.model.ActionDetailView;
+import io.github.actionguard.ops.api.model.ActionOutboxView;
 import io.github.actionguard.ops.api.model.CompensationLogView;
 import io.github.actionguard.ops.api.model.ConsumeDetailView;
 import io.github.actionguard.ops.api.model.StepDetailView;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
+import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -27,9 +29,11 @@ class ActionQueryServiceTest {
     @Test
     void shouldAssembleActionTimelineAcrossRuntimeAndGovernanceSources() {
         ActionOpsQueryRepository queryRepository = mock(ActionOpsQueryRepository.class);
+        ActionOutboxQueryRepository actionOutboxQueryRepository = mock(ActionOutboxQueryRepository.class);
         ActionCompensationLogQueryRepository compensationRepository = mock(ActionCompensationLogQueryRepository.class);
         ActionTransitionLogRepository transitionLogRepository = mock(ActionTransitionLogRepository.class);
-        ActionQueryService service = new ActionQueryService(queryRepository, compensationRepository, transitionLogRepository);
+        ActionQueryService service = new ActionQueryService(
+                queryRepository, actionOutboxQueryRepository, compensationRepository, transitionLogRepository);
 
         given(queryRepository.getActionDetail("act-1")).willReturn(Optional.of(new ActionDetailView(
                 "act-1",
@@ -108,9 +112,11 @@ class ActionQueryServiceTest {
     @Test
     void shouldAttachTimelineToActionDetail() {
         ActionOpsQueryRepository queryRepository = mock(ActionOpsQueryRepository.class);
+        ActionOutboxQueryRepository actionOutboxQueryRepository = mock(ActionOutboxQueryRepository.class);
         ActionCompensationLogQueryRepository compensationRepository = mock(ActionCompensationLogQueryRepository.class);
         ActionTransitionLogRepository transitionLogRepository = mock(ActionTransitionLogRepository.class);
-        ActionQueryService service = new ActionQueryService(queryRepository, compensationRepository, transitionLogRepository);
+        ActionQueryService service = new ActionQueryService(
+                queryRepository, actionOutboxQueryRepository, compensationRepository, transitionLogRepository);
 
         given(queryRepository.getActionDetail("act-2")).willReturn(Optional.of(new ActionDetailView(
                 "act-2",
@@ -149,5 +155,24 @@ class ActionQueryServiceTest {
 
         assertThat(detail.timeline()).hasSize(2);
         assertThat(detail.timeline().get(1).category()).isEqualTo("TRANSITION");
+    }
+
+    @Test
+    void shouldReturnOutboxDiagnosticsFromQueryRepository() {
+        ActionOpsQueryRepository queryRepository = mock(ActionOpsQueryRepository.class);
+        ActionOutboxQueryRepository actionOutboxQueryRepository = mock(ActionOutboxQueryRepository.class);
+        ActionCompensationLogQueryRepository compensationRepository = mock(ActionCompensationLogQueryRepository.class);
+        ActionTransitionLogRepository transitionLogRepository = mock(ActionTransitionLogRepository.class);
+        ActionQueryService service = new ActionQueryService(
+                queryRepository, actionOutboxQueryRepository, compensationRepository, transitionLogRepository);
+        ActionOutboxView expected = new ActionOutboxView(
+                "outbox-1", "act-1", "ACTION_EXECUTE", "dispatch-1",
+                io.github.actionguard.core.model.ActionOutboxStatus.NEW,
+                Instant.parse("2026-06-26T12:00:00Z"), 3, 2, 4,
+                Instant.parse("2026-06-26T11:00:00Z"), Instant.parse("2026-06-26T12:00:00Z")
+        );
+        given(actionOutboxQueryRepository.findByActionInstanceId("act-1")).willReturn(List.of(expected));
+
+        assertThat(service.outboxes("act-1")).containsExactly(expected);
     }
 }

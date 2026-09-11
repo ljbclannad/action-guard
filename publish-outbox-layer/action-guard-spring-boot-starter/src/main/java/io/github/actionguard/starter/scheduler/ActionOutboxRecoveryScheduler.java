@@ -3,6 +3,7 @@ package io.github.actionguard.starter.scheduler;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationService;
 import io.github.actionguard.core.runtime.recovery.ActionOutboxRecoveryService;
 import io.github.actionguard.core.runtime.recovery.ActionStuckDetectionService;
+import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import io.github.actionguard.starter.properties.ActionGuardRecoveryProperties;
 import org.springframework.context.SmartLifecycle;
 
@@ -33,18 +34,21 @@ public class ActionOutboxRecoveryScheduler implements SmartLifecycle {
     private final Optional<ActionCompensationService> compensationService;
     private final Optional<ActionStuckDetectionService> stuckDetectionService;
     private final ActionGuardRecoveryProperties properties;
+    private final ActionObservabilityService observabilityService;
     private volatile boolean running;
 
     public ActionOutboxRecoveryScheduler(
             ActionOutboxRecoveryService recoveryService,
             Optional<ActionCompensationService> compensationService,
             Optional<ActionStuckDetectionService> stuckDetectionService,
-            ActionGuardRecoveryProperties properties
+            ActionGuardRecoveryProperties properties,
+            ActionObservabilityService observabilityService
     ) {
         this.recoveryService = Objects.requireNonNull(recoveryService, "recoveryService must not be null");
         this.compensationService = Objects.requireNonNull(compensationService, "compensationService must not be null");
         this.stuckDetectionService = Objects.requireNonNull(stuckDetectionService, "stuckDetectionService must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.observabilityService = Objects.requireNonNull(observabilityService, "observabilityService must not be null");
     }
 
     @Override
@@ -63,18 +67,37 @@ public class ActionOutboxRecoveryScheduler implements SmartLifecycle {
         );
     }
 
-    private void runRecoveryCycle() {
+    void runRecoveryCycle() {
         // 一个周期内顺序处理 outbox 恢复、补偿恢复和 stuck 检测。
         // 这样链路清晰，出问题时也更容易从日志判断卡在哪个恢复阶段。
-        recoveryService.recoverDueOutboxes(properties.getBatchSize(), properties.getClaimTimeout());
-        compensationService.ifPresent(service -> service.recoverInterruptedCompensations(
+        runPhase("outbox", () -> {
+            int recoveredCount = recoveryService.recoverDueOutboxes(properties.getBatchSize(), properties.getClaimTimeout());
+            observabilityService.outboxRecoverySucceeded(recoveredCount);
+        });
+        runPhase("compensation", () -> compensationService.ifPresent(service -> service.recoverInterruptedCompensations(
                 properties.getBatchSize(),
                 properties.getCompensationTimeout()
-        ));
-        stuckDetectionService.ifPresent(service -> service.detectStuckActions(
+        )));
+        runPhase("stuck", () -> stuckDetectionService.ifPresent(service -> service.detectStuckActions(
                 properties.getBatchSize(),
                 properties.getStuckActionTimeout()
-        ));
+        )));
+    }
+
+    private void runPhase(String phase, Runnable operation) {
+        try {
+            operation.run();
+        } catch (RuntimeException exception) {
+            try {
+                observabilityService.recoveryPhaseFailed(phase, exception);
+            } catch (RuntimeException observabilityException) {
+                System.getLogger(ActionOutboxRecoveryScheduler.class.getName()).log(
+                        System.Logger.Level.WARNING,
+                        "Action Guard recovery phase observability failed: " + phase,
+                        observabilityException
+                );
+            }
+        }
     }
 
     @Override
