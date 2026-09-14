@@ -11,6 +11,7 @@ public class ActionGuardProperties {
     private int publishRetryMaxAttempts = 1;
     private boolean metricsEnabled = true;
     private ActionGuardRecoveryProperties recovery = new ActionGuardRecoveryProperties();
+    private ActionGuardAlertOutboxProperties alertOutbox = new ActionGuardAlertOutboxProperties();
     private Execution execution = new Execution();
 
     public List<String> getDefinitionLocations() {
@@ -43,6 +44,14 @@ public class ActionGuardProperties {
 
     public void setRecovery(ActionGuardRecoveryProperties recovery) {
         this.recovery = recovery;
+    }
+
+    public ActionGuardAlertOutboxProperties getAlertOutbox() {
+        return alertOutbox;
+    }
+
+    public void setAlertOutbox(ActionGuardAlertOutboxProperties alertOutbox) {
+        this.alertOutbox = alertOutbox;
     }
 
     public Execution getExecution() {

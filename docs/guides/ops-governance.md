@@ -16,7 +16,8 @@
 - Action 详情查询
 - Step 详情查询
 - 消费明细查询
-- Outbox 投递诊断查询
+- 执行 Outbox 投递诊断查询
+- 告警 Outbox 投递诊断查询
 - 审计日志查询
 - 人工重试
 - 跳过当前步骤
@@ -34,7 +35,7 @@
 - 补偿执行会写入 Step 级别的持久化补偿日志
 - 跳过能力目前采用最小语义：将当前 Step 置为稳定成功态，并通过审计日志区分“操作员跳过”和“真实执行成功”
 - Action、Step 和 Outbox 的写入现在通过 `version` 共用统一的基于乐观锁的 fencing 规则
-- 当前项目阶段还没有实现权限控制
+- 治理 HTTP API 必须通过接入方提供的身份解析 SPI 完成认证与授权；未提供身份解析器时默认拒绝访问
 
 ## 治理目标
 
@@ -133,6 +134,18 @@
 - `attemptCount` 是投递失败回退与业务重试调度都会累加的累计计数，不能解释为纯消息发送失败次数
 - `deliveryAttemptCount` 才是仅消息发送失败次数；`version` 是乐观锁版本，不是重试次数
 
+### 告警 Outbox 投递诊断
+
+通过 `GET /api/actions/{actionInstanceId}/alert-outboxes` 查询关联 Action 的可靠告警记录。该接口属于 `/api/actions/**`，需要 `READ` 权限；按 `createdAt`、`id` 升序返回，不提供跨 Action 全局查询、人工重投、强制终止或状态修改。
+
+响应包含 `id`、稳定的 `eventId`、类型、级别、Action/Step 关联、`status`、`availableAt`、`deliveryAttemptCount`、已脱敏的 `lastErrorMessage`、发生/创建/更新时间和 `version`。
+
+- 告警记录在业务状态变更所在事务内写入；除相同业务事件的 `dedupeKey` 冲突外，写入或载荷序列化异常会使业务事务回滚
+- `NEW → CLAIMED → DONE / DEAD` 是独立于执行 Outbox 的状态机，`deliveryAttemptCount` 只记录外部 sender 失败次数
+- `DONE` 仅表示 `ActionAlertSender` 调用成功，不代表告警已被人工阅读
+- sender 成功后若 `DONE` 落库失败，恢复扫描会允许再次发送，因此属于 at-least-once；接收端必须按 `eventId` 去重
+- 未配置 sender 时仍会保存 `NEW` 记录，但不会主动投递；后续接入 sender 后可由恢复扫描继续处理
+
 ## 当前支持的人工操作
 
 当前 API 暴露的人工操作集合不大，但约束比较严格。
@@ -153,7 +166,7 @@
 
 规则：
 
-- 当前 API 契约还不要求显式填写原因
+- 所有人工写操作均要求在 JSON 请求体中提供非空白 `reason`，并将其持久化到审计请求快照
 - 当前项目阶段还不支持“不可跳过 Step”的元数据
 - 会写入审计记录，并推进到下一步或 `SUCCESS`
 - 当前实现会把被跳过的 Step 标记为稳定成功态，并依赖审计日志保留“操作员跳过”的语义
@@ -202,8 +215,12 @@
 当前实现说明：
 
 - 已实现 Action 级状态校验
-- 当前项目阶段有意不实现权限边界
-- 目前还没有强制显式原因字段
+- 读接口需要 `READ` 权限；`retry`、`skip`、`cancel`、`compensate` 分别需要同名权限
+- 接入方必须提供 `ActionOpsPrincipalResolver`，将已认证的 Spring Security、JWT、网关或 SSO 身份转换为 `ActionOpsPrincipal`；未提供或未认证时返回 `401`，权限不足时返回 `403`
+- 框架不再信任任意请求 Header 作为操作人来源
+- 所有人工写操作必须提供非空白 `reason`：HTTP 调用在 JSON body 中传递，缺失或空白时返回 `400`；直接 Java 调用必须使用 `ActionCommandService` 的三参数方法，传入 `null` 或空白时抛出
+  `IllegalArgumentException`
+- `reason` 校验发生在状态读取、幂等处理、Outbox 调度、补偿委托、审计和指标之前；无效原因表示命令未被接受，因此不会写入治理审计
 - 目前还没有实现不可跳过 Step 标记
 - 补偿还额外受到 Action 级治理开关保护
 - 治理写冲突会显式暴露，而不是静默重试
@@ -214,6 +231,7 @@
 
 当前标准告警事件统一使用 `ActionAlertEvent` 建模，核心字段包括：
 
+- `eventId`
 - `type`
 - `level`
 - `title`
@@ -235,15 +253,18 @@
 - `OUTBOX_DEAD`
 - `ACTION_STUCK`
 
-如果引入 `action-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*`，这些事件会被直接投递到外部 webhook。
+引入 `action-guard-alert-webhook` 并配置 `action.guard.alert.webhook.*` 后，webhook adapter 会提供 `ActionAlertSender`。它只进行一次 HTTP 外发，不自行重试或重新入队；网络、超时和非成功响应异常由告警 Outbox
+状态机处理。webhook payload 包含稳定的 `eventId`，接收端必须据此去重。
 
-`OUTBOX_PUBLISH_FAILED` 表示一次 dispatch 调用中的发送失败或即时重试耗尽，不代表该记录已停止自动投递。`OUTBOX_DEAD` 仅在 Outbox 使用乐观锁成功转为 `DEAD` 后发布，表示 `deliveryAttemptCount` 已达到实际配置的最大投递次数；告警详情携带 Outbox、dispatch 和次数关联信息，可结合 `GET /api/actions/{actionInstanceId}/outboxes` 查询当前快照定位。
+`OUTBOX_PUBLISH_FAILED` 表示一次 dispatch 调用中的发送失败或即时重试耗尽，不代表执行 Outbox 已停止自动投递。`OUTBOX_DEAD` 仅在执行 Outbox 使用乐观锁成功转为 `DEAD` 后记录，表示 `deliveryAttemptCount`
+已达到实际配置的最大投递次数；告警详情携带 Outbox、dispatch 和次数关联信息，可结合 `GET /api/actions/{actionInstanceId}/outboxes` 查询当前快照定位。
 
 ### 与事务的关系
 
-在 Spring 实际事务内产生的告警与指标延后到提交成功后发送，事务回滚时不发送，避免记录未提交的执行结果。提交后的监控通道异常会记录警告日志，不改变已提交状态，也不阻断后续 Outbox 投递。
+告警事件在当前业务事务内先记录到 `action_alert_outbox`；正常写入失败或详情序列化失败会中止业务事务。重复的同一业务事件命中本地 `dedupeKey` 时返回已存在记录，作为幂等成功，不会回滚业务。
 
-这类通知仍同步执行在提交回调中，不是持久化通知队列；进程退出可能导致通知丢失，外部监控实现应设置合理超时。无事务调用也会即时尝试发送，但出口异常只记录警告日志，不会反向破坏已完成的状态转换。
+告警外发由独立恢复调度处理，状态机为 `NEW → CLAIMED → DONE / DEAD`。sender 失败时记录脱敏错误摘要、退避回到 `NEW`，达到最大次数进入 `DEAD`。为保证不丢失，sender 成功但完成状态未成功落库时允许重投；因此承诺是
+at-least-once，而不是 exactly-once。指标仍维持提交后 best-effort，不会反向改变已经提交的业务状态。
 
 `OUTBOX_DEAD` 采用“成功状态转换后、当前进程尝试一次”的 best-effort 语义：乐观锁确保同一次 `DEAD` 转换只有成功更新方尝试告警，但不保证 webhook 已送达；若 `DEAD` 落库后进程在通知前退出，仍可能漏报。跨重启、跨节点的可靠通知投递需要后续独立的持久化通知 Outbox 设计。
 
@@ -382,7 +403,8 @@ management:
 
 - 已通过 `action_ops_audit_log` 实现持久化审计存储
 - 当前存储字段包括 action id、operation type、operator、请求快照、结果状态、结果消息和创建时间
-- 当前 `operator` 来自可选请求头 `X-Action-Guard-Operator`，默认值是 `anonymous`
+- 当前 `operator` 来自通过 `ActionOpsPrincipalResolver` 验证的 `ActionOpsPrincipal.operatorId`，不接受任意 Header 伪造身份
+- 写操作请求快照至少保存 `reason`；取消和跳过还会记录状态迁移 event、fromStatus 与 toStatus
 - 补偿成功与失败都走同一条治理审计链路
 
 ## 治理 API 范围

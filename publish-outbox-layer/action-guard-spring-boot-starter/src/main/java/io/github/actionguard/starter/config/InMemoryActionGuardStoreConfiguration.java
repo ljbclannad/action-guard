@@ -58,6 +58,12 @@ public class InMemoryActionGuardStoreConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ActionAlertOutboxRepository actionAlertOutboxRepository() {
+        return new InMemoryActionAlertOutboxRepository();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ActionConsumeLogRepository actionConsumeLogRepository() {
         return new InMemoryActionConsumeLogRepository();
     }

@@ -14,16 +14,17 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.time.Duration;
 
 public class ActionObservabilityService {
 
     private static final System.Logger LOGGER = System.getLogger(ActionObservabilityService.class.getName());
     private final ActionAlertPublisher actionAlertPublisher;
+    private final ActionAlertOutboxRecorder actionAlertOutboxRecorder;
     private final ActionMetricsRecorder actionMetricsRecorder;
     private final Clock clock;
 
@@ -38,6 +39,23 @@ public class ActionObservabilityService {
     ) {
         this.actionAlertPublisher = Objects.requireNonNull(actionAlertPublisher, "actionAlertPublisher must not be null")
                 .orElse(null);
+        this.actionAlertOutboxRecorder = null;
+        this.actionMetricsRecorder = Objects.requireNonNull(actionMetricsRecorder, "actionMetricsRecorder must not be null")
+                .orElse(null);
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
+    /**
+     * 可靠告警路径：告警在当前业务事务内入队，指标仍保持提交后 best-effort。
+     */
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+    public ActionObservabilityService(
+            ActionAlertOutboxRecorder actionAlertOutboxRecorder,
+            Optional<ActionMetricsRecorder> actionMetricsRecorder,
+            Clock clock
+    ) {
+        this.actionAlertPublisher = null;
+        this.actionAlertOutboxRecorder = Objects.requireNonNull(actionAlertOutboxRecorder, "actionAlertOutboxRecorder must not be null");
         this.actionMetricsRecorder = Objects.requireNonNull(actionMetricsRecorder, "actionMetricsRecorder must not be null")
                 .orElse(null);
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -307,11 +325,17 @@ public class ActionObservabilityService {
                 clock.instant(),
                 Map.copyOf(details)
         );
-        afterCommitOrNow(() -> {
-            if (actionAlertPublisher != null) {
-                actionAlertPublisher.publish(event);
-            }
-        });
+        if (actionAlertOutboxRecorder != null) {
+            // 不能包裹在 afterCommit 中：写入失败必须参与当前业务事务并触发回滚。
+            actionAlertOutboxRecorder.record(event);
+        } else {
+            // 仅为直接构造旧服务的接入方保留过渡性 best-effort 行为。
+            afterCommitOrNow(() -> {
+                if (actionAlertPublisher != null) {
+                    actionAlertPublisher.publish(event);
+                }
+            });
+        }
         increment("action.guard.alert.published", actionName, stepType);
     }
 

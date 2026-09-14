@@ -5,20 +5,20 @@ import io.github.actionguard.api.ActionRequest;
 import io.github.actionguard.api.definition.ActionDefinition;
 import io.github.actionguard.api.runtime.ActionStepContext;
 import io.github.actionguard.api.runtime.StepExecutionResult;
+import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.api.spi.ActionStepHandler;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionOutbox;
 import io.github.actionguard.core.model.ActionOutboxStatus;
 import io.github.actionguard.core.model.ActionStepInstance;
-import io.github.actionguard.core.repository.ActionConsumeLogRepository;
-import io.github.actionguard.core.repository.ActionInstanceRepository;
-import io.github.actionguard.core.repository.ActionOutboxRepository;
-import io.github.actionguard.core.repository.ActionStepInstanceRepository;
+import io.github.actionguard.core.repository.*;
 import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.observability.ActionAlertOutboxRecoveryService;
 import io.github.actionguard.core.runtime.registry.StepHandlerRegistry;
-import io.github.actionguard.api.spi.ActionMetricsRecorder;
 import io.github.actionguard.starter.metrics.InMemoryActionMetricsRecorder;
+import io.github.actionguard.starter.properties.ActionGuardProperties;
+import io.github.actionguard.starter.scheduler.ActionAlertOutboxRecoveryScheduler;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -27,14 +27,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.AbstractPlatformTransactionManager;
-import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
 
 import javax.sql.DataSource;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +69,41 @@ class ActionGuardAutoConfigurationTest {
                     ActionDefinition definition = registry.getRequired("order-cancel-flow");
                     assertThat(definition.steps()).hasSize(2);
                     assertThat(definition.steps().get(0).stepType()).isEqualTo("MQ_MESSAGE");
+                });
+    }
+
+    @Test
+    void shouldConfigureAlertOutboxDefaultsForMemoryStore() {
+        contextRunner.run(context -> {
+            ActionGuardProperties properties = context.getBean(ActionGuardProperties.class);
+
+            assertThat(context).hasSingleBean(ActionAlertOutboxRepository.class);
+            assertThat(context).hasSingleBean(ActionAlertOutboxRecoveryService.class);
+            assertThat(context).hasSingleBean(ActionAlertOutboxRecoveryScheduler.class);
+            assertThat(properties.getAlertOutbox().isEnabled()).isTrue();
+            assertThat(properties.getAlertOutbox().getBatchSize()).isEqualTo(100);
+            assertThat(properties.getAlertOutbox().getClaimTimeout()).isEqualTo(java.time.Duration.ofSeconds(30));
+        });
+    }
+
+    @Test
+    void shouldBindAlertOutboxProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "action.guard.alert-outbox.enabled=false",
+                        "action.guard.alert-outbox.batch-size=25",
+                        "action.guard.alert-outbox.claim-timeout=45s",
+                        "action.guard.alert-outbox.max-delivery-attempts=4",
+                        "action.guard.alert-outbox.retry-backoff=9s"
+                )
+                .run(context -> {
+                    ActionGuardProperties properties = context.getBean(ActionGuardProperties.class);
+
+                    assertThat(properties.getAlertOutbox().isEnabled()).isFalse();
+                    assertThat(properties.getAlertOutbox().getBatchSize()).isEqualTo(25);
+                    assertThat(properties.getAlertOutbox().getClaimTimeout()).isEqualTo(java.time.Duration.ofSeconds(45));
+                    assertThat(properties.getAlertOutbox().getMaxDeliveryAttempts()).isEqualTo(4);
+                    assertThat(properties.getAlertOutbox().getRetryBackoff()).isEqualTo(java.time.Duration.ofSeconds(9));
                 });
     }
 

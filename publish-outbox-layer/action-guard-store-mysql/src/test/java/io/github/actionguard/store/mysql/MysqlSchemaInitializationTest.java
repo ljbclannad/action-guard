@@ -33,7 +33,7 @@ class MysqlSchemaInitializationTest {
     }
 
     @Test
-    @DisplayName("完整脚本重复执行后保留八张表和已有数据")
+    @DisplayName("完整脚本重复执行后保留九张表和已有数据")
     void shouldInitializeRepeatedlyWithoutChangingExistingData() {
         insertStep("step-1", "action-1", 0);
 
@@ -42,7 +42,7 @@ class MysqlSchemaInitializationTest {
         assertThat(jdbcTemplate.queryForObject("""
                 select count(*) from information_schema.tables
                 where table_schema = 'PUBLIC' and table_type = 'BASE TABLE'
-                """, Integer.class)).isEqualTo(8);
+                """, Integer.class)).isEqualTo(9);
         assertThat(jdbcTemplate.queryForObject(
                 "select step_name from action_step_instance where id = 'step-1'", String.class))
                 .isEqualTo("发送通知");

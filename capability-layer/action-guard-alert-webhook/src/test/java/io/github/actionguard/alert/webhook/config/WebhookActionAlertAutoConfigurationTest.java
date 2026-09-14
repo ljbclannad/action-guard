@@ -1,7 +1,7 @@
 package io.github.actionguard.alert.webhook.config;
 
-import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.alert.webhook.properties.ActionGuardWebhookAlertProperties;
+import io.github.actionguard.api.spi.ActionAlertSender;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -16,7 +16,7 @@ class WebhookActionAlertAutoConfigurationTest {
     @Test
     void shouldNotCreatePublisherWhenWebhookDisabled() {
         contextRunner.run(context -> {
-            assertThat(context).doesNotHaveBean(ActionAlertPublisher.class);
+            assertThat(context).doesNotHaveBean(ActionAlertSender.class);
         });
     }
 
@@ -28,7 +28,7 @@ class WebhookActionAlertAutoConfigurationTest {
                         "action.guard.alert.webhook.url=https://example.com/hook"
                 )
                 .run(context -> {
-                    assertThat(context).hasSingleBean(ActionAlertPublisher.class);
+                    assertThat(context).hasSingleBean(ActionAlertSender.class);
                     assertThat(context).hasSingleBean(ActionGuardWebhookAlertProperties.class);
                 });
     }

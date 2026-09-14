@@ -1,5 +1,6 @@
 package io.github.actionguard.ops.api.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.core.model.ActionInstance;
 import io.github.actionguard.core.model.ActionStatus;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
@@ -67,5 +68,18 @@ class ActionAuditServiceTest {
                 .contains("MANUAL_CANCEL_REQUESTED")
                 .contains("DISPATCHING")
                 .contains("IGNORED");
+    }
+
+    @Test
+    void shouldPersistEscapedReasonInCommandAuditPayload() throws Exception {
+        ActionAuditLogRepository repository = InMemoryAuditLogRepository.create();
+        ActionAuditService service = new ActionAuditService(repository);
+
+        service.recordCommand("act-1", "RETRY", "operator-1", "下游 \"故障\"\n请在恢复后重试", "SUCCESS", "ok");
+
+        String payload = service.query(new AuditLogQueryFilter(1, 20, "act-1", null, null, null, null))
+                .items().get(0).requestPayloadJson();
+        assertThat(new ObjectMapper().readTree(payload).get("reason").asText())
+                .isEqualTo("下游 \"故障\"\n请在恢复后重试");
     }
 }

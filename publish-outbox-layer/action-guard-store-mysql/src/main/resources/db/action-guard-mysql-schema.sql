@@ -55,6 +55,91 @@ create table if not exists action_outbox (
     index idx_action_outbox_recoverable (status, available_at, created_at)
 ) comment = '执行消息的可靠投递记录';
 
+create table if not exists action_alert_outbox
+(
+    id
+    varchar
+(
+    64
+) primary key comment '告警 Outbox 记录唯一标识',
+    event_id varchar
+(
+    64
+) not null comment '外部投递稳定事件标识，接收端据此去重',
+    dedupe_key char
+(
+    64
+) not null comment '本地语义去重键的 SHA-256 摘要，重复记录视为幂等成功',
+    type varchar
+(
+    64
+) not null comment '告警类型',
+    level varchar
+(
+    32
+) not null comment '告警级别',
+    title varchar
+(
+    256
+) not null comment '告警标题',
+    message text comment '告警消息',
+    action_name varchar
+(
+    128
+) comment '关联 Action 定义名称',
+    action_instance_id varchar
+(
+    64
+) comment '关联 Action 实例标识；消费级告警可为空',
+    step_name varchar
+(
+    128
+) comment '关联步骤名称',
+    step_type varchar
+(
+    128
+) comment '关联步骤类型',
+    occurred_at timestamp not null comment '业务事件发生时间',
+    details_json text comment '告警详情 JSON',
+    status varchar
+(
+    32
+) not null comment '投递状态：NEW、CLAIMED、DONE 或 DEAD；DONE 仅表示 sender 调用成功',
+    available_at timestamp not null comment '下次允许投递时间',
+    delivery_attempt_count int not null default 0 comment '仅统计外部发送失败次数',
+    last_error_message varchar
+(
+    512
+) comment '最近一次外发失败的脱敏摘要',
+    version int not null default 0 comment '乐观锁版本，用于多节点抢占',
+    created_at timestamp not null comment '记录创建时间',
+    updated_at timestamp not null comment '最近更新时间，也用于 claim 超时判断',
+    unique index uk_action_alert_outbox_event
+(
+    event_id
+),
+    unique index uk_action_alert_outbox_dedupe
+(
+    dedupe_key
+),
+    index idx_action_alert_outbox_recoverable
+(
+    status,
+    available_at,
+    created_at
+),
+    index idx_action_alert_outbox_claimed
+(
+    status,
+    updated_at
+),
+    index idx_action_alert_outbox_action
+(
+    action_instance_id,
+    created_at
+)
+    ) comment = '不可变告警的可靠外部投递记录';
+
 create table if not exists action_consume_log (
     id varchar(64) primary key comment '消费记录唯一标识',
     message_id varchar(128) not null comment '消息唯一标识，当前按此标识抢占和去重，不按消费组分隔',

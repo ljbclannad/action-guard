@@ -2,10 +2,7 @@ package io.github.actionguard.store.mysql;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.actionguard.core.repository.*;
-import io.github.actionguard.store.mysql.mapper.ActionConsumeLogMapper;
-import io.github.actionguard.store.mysql.mapper.ActionInstanceMapper;
-import io.github.actionguard.store.mysql.mapper.ActionOutboxMapper;
-import io.github.actionguard.store.mysql.mapper.ActionStepInstanceMapper;
+import io.github.actionguard.store.mysql.mapper.*;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -44,6 +41,11 @@ public class MysqlActionGuardStoreAutoConfiguration {
     @Bean
     public ActionOutboxRepository actionOutboxRepository(ActionOutboxMapper mapper) {
         return new MysqlActionOutboxRepository(mapper);
+    }
+
+    @Bean
+    public ActionAlertOutboxRepository actionAlertOutboxRepository(ActionAlertOutboxMapper mapper) {
+        return new MysqlActionAlertOutboxRepository(mapper);
     }
 
     @Bean

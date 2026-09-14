@@ -52,6 +52,32 @@
 
 该变更不涉及表结构、持久化数据格式或消息协议迁移。配置细节见 [执行传输选择](../guides/starter-config.md#执行传输选择)。
 
+### 治理 API 安全迁移
+
+治理 HTTP API 的认证授权和人工操作原因要求属于破坏性变更。升级后，`/api/actions/**` 与 `/api/audit-logs/**` 不再允许匿名访问，也不再信任 `X-Action-Guard-Operator`；未注册 `ActionOpsPrincipalResolver`
+或无法解析已认证身份时返回 `401`，权限不足时返回 `403`。
+
+接入方需要实现 `ActionOpsPrincipalResolver`，将其已验证的认证体系转换为 `ActionOpsPrincipal`，并授予 `READ`、`RETRY`、`CANCEL`、`SKIP`、`COMPENSATE` 中所需权限。所有 `retry`、`cancel`、`skip`、`compensate`
+请求还必须提交包含非空白 `reason` 的 JSON body，例如 `{"reason":"已确认下游故障恢复"}`。审计表结构不变，原因写入既有的 `request_payload_json` 字段。
+
+`ActionCommandService` 的双参数 `retry`、`cancel`、`skip`、`compensate` overload 已移除，也是破坏性 Java Interface 变更。直接 Java 调用方需要改为传入第三个 `reason` 参数，例如将
+`service.retry(actionInstanceId, operator)` 改为 `service.retry(actionInstanceId, operator, reason)`；其他三个命令同理。`reason` 不可为 `null` 或空白，否则服务层抛出 `IllegalArgumentException`
+；不存在默认原因或运行时兼容回退，因此已有调用方需要重新编译并完成迁移。
+
+### 可靠告警 Outbox 迁移
+
+本版本新增 `action_alert_outbox`，用于将告警记录与业务状态变更原子提交，并采用独立于 `action_outbox` 的 `NEW → CLAIMED → DONE / DEAD` 状态机。升级 MySQL 存储前必须先执行
+`action-guard-store-mysql/src/main/resources/db/migration/V0.1.1__add_action_alert_outbox.sql`；全量初始化脚本只适用于新库，不能替代存量库迁移。
+
+新增的 `dedupe_key` 是固定长度的 SHA-256 摘要，以避免 MySQL 字符集下长唯一索引的兼容风险。`event_id` 是外部投递稳定标识：sender 成功但完成状态未落库时可能重发，接收端必须按该字段去重。`DONE` 仅表示 sender
+成功调用，不表示人已阅读告警。
+
+告警 SPI 从过渡型 `ActionAlertPublisher` 演进为 `ActionAlertSender`。Starter 不再使用 publisher 直接外发；已有自定义 publisher 可以暂时继续作为直接构造 `ActionObservabilityService` 的兼容入口，但应迁移为实现
+`ActionAlertSender`，并确保 `send` 只执行一次外发、异常向上传播、不自行重试、不重新入队。`ActionAlertPublisher` 已标记为 deprecated，当前版本暂不删除该公共类型。
+
+新配置组为 `action.guard.alert-outbox.*`，包括启用开关、扫描批大小、扫描间隔、claim timeout、最大投递次数和退避。未提供 sender 不会阻止启动或事务内入队，告警保持 `NEW` 并可由治理查询；之后接入 sender
+并启用调度即可恢复历史记录投递。配置详情见 [Starter 配置说明](../guides/starter-config.md#告警-outbox-配置项)。
+
 ### 通用策略
 
 升级兼容优先级建议：

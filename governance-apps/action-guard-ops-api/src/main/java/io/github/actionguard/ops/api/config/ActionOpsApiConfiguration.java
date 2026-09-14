@@ -7,22 +7,19 @@ import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
-import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
-import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
-import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
-import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
-import io.github.actionguard.ops.api.repository.jdbc.JdbcActionAuditLogRepository;
-import io.github.actionguard.ops.api.repository.jdbc.JdbcActionCompensationLogQueryRepository;
-import io.github.actionguard.ops.api.repository.jdbc.JdbcActionOpsQueryRepository;
-import io.github.actionguard.ops.api.repository.jdbc.JdbcActionOutboxQueryRepository;
+import io.github.actionguard.ops.api.repository.*;
+import io.github.actionguard.ops.api.repository.jdbc.*;
+import io.github.actionguard.ops.api.security.ActionOpsAuthorizationInterceptor;
 import io.github.actionguard.ops.api.service.ActionAuditService;
 import io.github.actionguard.ops.api.service.ActionCommandService;
 import io.github.actionguard.ops.api.service.ActionQueryService;
 import io.github.actionguard.ops.api.support.ActionCommandValidator;
-import io.github.actionguard.ops.api.support.OperatorResolver;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Optional;
 
@@ -45,6 +42,11 @@ public class ActionOpsApiConfiguration {
     }
 
     @Bean
+    ActionAlertOutboxQueryRepository actionAlertOutboxQueryRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcActionAlertOutboxQueryRepository(jdbcTemplate);
+    }
+
+    @Bean
     ActionCompensationLogQueryRepository actionCompensationLogQueryRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcActionCompensationLogQueryRepository(jdbcTemplate);
     }
@@ -58,12 +60,14 @@ public class ActionOpsApiConfiguration {
     ActionQueryService actionQueryService(
             ActionOpsQueryRepository actionOpsQueryRepository,
             ActionOutboxQueryRepository actionOutboxQueryRepository,
+            ActionAlertOutboxQueryRepository actionAlertOutboxQueryRepository,
             ActionCompensationLogQueryRepository actionCompensationLogQueryRepository,
             ActionTransitionLogRepository actionTransitionLogRepository
     ) {
         return new ActionQueryService(
                 actionOpsQueryRepository,
                 actionOutboxQueryRepository,
+                actionAlertOutboxQueryRepository,
                 actionCompensationLogQueryRepository,
                 actionTransitionLogRepository
         );
@@ -75,8 +79,21 @@ public class ActionOpsApiConfiguration {
     }
 
     @Bean
-    OperatorResolver operatorResolver() {
-        return new OperatorResolver();
+    ActionOpsAuthorizationInterceptor actionOpsAuthorizationInterceptor(
+            ObjectProvider<io.github.actionguard.ops.api.security.ActionOpsPrincipalResolver> principalResolverProvider
+    ) {
+        return new ActionOpsAuthorizationInterceptor(principalResolverProvider);
+    }
+
+    @Bean
+    WebMvcConfigurer actionOpsWebMvcConfigurer(ActionOpsAuthorizationInterceptor actionOpsAuthorizationInterceptor) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(actionOpsAuthorizationInterceptor)
+                        .addPathPatterns("/api/actions/**", "/api/audit-logs/**");
+            }
+        };
     }
 
     @Bean

@@ -1,33 +1,28 @@
 package io.github.actionguard.ops.api.service;
 
-import io.github.actionguard.core.model.ActionInstance;
-import io.github.actionguard.core.model.ActionOutbox;
-import io.github.actionguard.core.model.ActionOutboxStatus;
-import io.github.actionguard.core.model.ActionStepInstance;
-import io.github.actionguard.core.model.ActionStepStatus;
-import io.github.actionguard.core.model.ActionStatus;
-import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
-import io.github.actionguard.core.runtime.definition.ActionDefinitionValidator;
-import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
-import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
-import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
-import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
-import io.github.actionguard.core.runtime.execution.ActionExecutionCallback;
-import io.github.actionguard.ops.api.support.ActionCommandValidator;
-import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
-import io.github.actionguard.core.runtime.execution.DefaultActionExecutionCallback;
-import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
-import io.github.actionguard.core.runtime.definition.InMemoryActionDefinitionRegistry;
-import io.github.actionguard.core.runtime.registry.StepHandlerRegistry;
-import io.github.actionguard.core.runtime.retry.FixedAttemptActionRetryPolicy;
-import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
-import io.github.actionguard.ops.api.repository.jdbc.InMemoryAuditLogRepository;
 import io.github.actionguard.api.definition.ActionDefinition;
 import io.github.actionguard.api.definition.ActionStepDefinition;
 import io.github.actionguard.api.runtime.ActionExecutionMessage;
 import io.github.actionguard.api.runtime.ActionStepContext;
 import io.github.actionguard.api.runtime.StepExecutionResult;
 import io.github.actionguard.api.spi.ActionStepHandler;
+import io.github.actionguard.core.model.*;
+import io.github.actionguard.core.repository.InMemoryActionInstanceRepository;
+import io.github.actionguard.core.repository.InMemoryActionOutboxRepository;
+import io.github.actionguard.core.repository.InMemoryActionStepInstanceRepository;
+import io.github.actionguard.core.runtime.compensation.ActionCompensationExecutor;
+import io.github.actionguard.core.runtime.definition.ActionDefinitionRegistry;
+import io.github.actionguard.core.runtime.definition.ActionDefinitionValidator;
+import io.github.actionguard.core.runtime.definition.InMemoryActionDefinitionRegistry;
+import io.github.actionguard.core.runtime.execution.ActionExecutionCallback;
+import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
+import io.github.actionguard.core.runtime.execution.DefaultActionExecutionCallback;
+import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
+import io.github.actionguard.core.runtime.registry.StepHandlerRegistry;
+import io.github.actionguard.core.runtime.retry.FixedAttemptActionRetryPolicy;
+import io.github.actionguard.ops.api.repository.ActionAuditLogRepository;
+import io.github.actionguard.ops.api.repository.jdbc.InMemoryAuditLogRepository;
+import io.github.actionguard.ops.api.support.ActionCommandValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -42,9 +37,12 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class ActionCommandServiceTest {
 
@@ -84,11 +82,13 @@ class ActionCommandServiceTest {
                 new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
         );
 
-        service.retry("act-1", "anonymous");
+        service.retry("act-1", "anonymous", "下游故障已恢复");
 
         assertThat(producer.published()).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).operationType()).isEqualTo("RETRY");
+        assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).requestPayloadJson())
+                .contains("下游故障已恢复");
         assertThat(metricsRecorder.counters)
                 .containsEntry("action.guard.governance.command|{actionName=unknown, command=RETRY, result=SUCCESS, stepType=unknown}", 1L);
     }
@@ -120,7 +120,7 @@ class ActionCommandServiceTest {
                 new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
         );
 
-        assertThatThrownBy(() -> service.retry("act-1", "anonymous"))
+        assertThatThrownBy(() -> service.retry("act-1", "anonymous", "消息发送端暂不可用"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ActionExecutionMessageProducer is not available");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -156,7 +156,7 @@ class ActionCommandServiceTest {
                 new ActionObservabilityService(Optional.empty(), Optional.of(metricsRecorder), Clock.fixed(Instant.parse("2026-06-26T12:00:00Z"), ZoneOffset.UTC))
         );
 
-        assertThatThrownBy(() -> service.retry("act-1", "anonymous"))
+        assertThatThrownBy(() -> service.retry("act-1", "anonymous", "确认不允许重试"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Retry is not allowed");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -192,7 +192,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.retry("act-1", "operator-1");
+        service.retry("act-1", "operator-1", "重新投递死亡 Outbox");
 
         ActionOutbox requeued = actionOutboxRepository.findByActionInstanceId("act-1").orElseThrow();
         assertThat(requeued.status()).isEqualTo(ActionOutboxStatus.DONE);
@@ -229,7 +229,7 @@ class ActionCommandServiceTest {
 
         TransactionSynchronizationManager.initSynchronization();
         try {
-            service.retry("act-1", "anonymous");
+            service.retry("act-1", "anonymous", "事务提交后重试");
 
             assertThat(producer.published()).isEmpty();
 
@@ -263,7 +263,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.cancel("act-1", "anonymous");
+        service.cancel("act-1", "anonymous", "人工停止后续执行");
 
         assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.IGNORED);
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -295,7 +295,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.skip("act-1", "anonymous");
+        service.skip("act-1", "anonymous", "确认可跳过当前步骤");
 
         assertThat(actionInstanceRepository.findById("act-1").orElseThrow().status()).isEqualTo(ActionStatus.SUCCESS);
         assertThat(actionStepInstanceRepository.findByActionInstanceId("act-1").get(0).status()).isEqualTo(ActionStepStatus.SUCCESS);
@@ -334,7 +334,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.skip("act-1", "anonymous");
+        service.skip("act-1", "anonymous", "继续执行下一步骤");
 
         ActionInstance updated = actionInstanceRepository.findById("act-1").orElseThrow();
         ActionOutbox updatedOutbox = actionOutboxRepository.findByActionInstanceId("act-1").orElseThrow();
@@ -369,7 +369,7 @@ class ActionCommandServiceTest {
                 new FailingCompensationService()
         );
 
-        assertThatThrownBy(() -> service.compensate("act-1", "anonymous"))
+        assertThatThrownBy(() -> service.compensate("act-1", "anonymous", "尝试补偿失败操作"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("compensation capability is not enabled");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -399,7 +399,7 @@ class ActionCommandServiceTest {
                 compensationService
         );
 
-        service.compensate("act-1", "anonymous");
+        service.compensate("act-1", "anonymous", "确认执行补偿");
 
         assertThat(compensationService.compensatedActionIds()).containsExactly("act-1");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -429,7 +429,7 @@ class ActionCommandServiceTest {
                 compensationService
         );
 
-        service.compensate("act-1", "anonymous");
+        service.compensate("act-1", "anonymous", "再次尝试补偿");
 
         assertThat(compensationService.compensatedActionIds()).containsExactly("act-1");
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -457,7 +457,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.cancel("act-1", "anonymous");
+        service.cancel("act-1", "anonymous", "重复取消确认");
 
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("SUCCESS");
@@ -485,7 +485,7 @@ class ActionCommandServiceTest {
                 compensationService
         );
 
-        service.compensate("act-1", "anonymous");
+        service.compensate("act-1", "anonymous", "补偿已完成确认");
 
         assertThat(compensationService.compensatedActionIds()).isEmpty();
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -518,7 +518,7 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        service.retry("act-1", "anonymous");
+        service.retry("act-1", "anonymous", "确认重试已排队");
 
         assertThat(producer.published()).isEmpty();
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
@@ -585,7 +585,7 @@ class ActionCommandServiceTest {
         runtimeThread.start();
         assertThat(handler.started.await(2, TimeUnit.SECONDS)).isTrue();
 
-        service.cancel("act-1", "anonymous");
+        service.cancel("act-1", "anonymous", "人工取消优先");
         handler.release.countDown();
         runtimeThread.join(2000);
 
@@ -634,10 +634,59 @@ class ActionCommandServiceTest {
                 new NoOpCompensationService()
         );
 
-        assertThatThrownBy(() -> service.cancel("act-1", "anonymous"))
+        assertThatThrownBy(() -> service.cancel("act-1", "anonymous", "处理并发冲突"))
                 .isInstanceOf(OptimisticLockingFailureException.class);
         assertThat(auditLogRepository.findByActionInstanceId("act-1")).hasSize(1);
         assertThat(auditLogRepository.findByActionInstanceId("act-1").get(0).resultStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void shouldRejectNullReasonBeforeAnyGovernanceCommandSideEffect() {
+        assertRejectsInvalidReason(service -> service.retry("act-1", "operator-1", null));
+        assertRejectsInvalidReason(service -> service.cancel("act-1", "operator-1", null));
+        assertRejectsInvalidReason(service -> service.skip("act-1", "operator-1", null));
+        assertRejectsInvalidReason(service -> service.compensate("act-1", "operator-1", null));
+    }
+
+    @Test
+    void shouldRejectBlankReasonBeforeAnyGovernanceCommandSideEffect() {
+        assertRejectsInvalidReason(service -> service.retry("act-1", "operator-1", "  "));
+        assertRejectsInvalidReason(service -> service.cancel("act-1", "operator-1", "  "));
+        assertRejectsInvalidReason(service -> service.skip("act-1", "operator-1", "  "));
+        assertRejectsInvalidReason(service -> service.compensate("act-1", "operator-1", "  "));
+    }
+
+    private void assertRejectsInvalidReason(Consumer<ActionCommandService> command) {
+        ActionInstanceRepositoryMocks repositories = new ActionInstanceRepositoryMocks();
+        ActionAuditLogRepository auditLogRepository = mock(ActionAuditLogRepository.class);
+        ActionCompensationExecutor compensationExecutor = mock(ActionCompensationExecutor.class);
+        ActionCommandService service = new ActionCommandService(
+                repositories.actionInstanceRepository,
+                repositories.actionOutboxRepository,
+                repositories.actionStepInstanceRepository,
+                new ActionCommandValidator(),
+                new ActionAuditService(auditLogRepository),
+                Optional.empty(),
+                compensationExecutor
+        );
+
+        assertThatThrownBy(() -> command.accept(service))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("reason must not be null or blank");
+
+        verifyNoInteractions(
+                repositories.actionInstanceRepository,
+                repositories.actionOutboxRepository,
+                repositories.actionStepInstanceRepository,
+                auditLogRepository,
+                compensationExecutor
+        );
+    }
+
+    private static final class ActionInstanceRepositoryMocks {
+        private final InMemoryActionInstanceRepository actionInstanceRepository = mock(InMemoryActionInstanceRepository.class);
+        private final InMemoryActionOutboxRepository actionOutboxRepository = mock(InMemoryActionOutboxRepository.class);
+        private final InMemoryActionStepInstanceRepository actionStepInstanceRepository = mock(InMemoryActionStepInstanceRepository.class);
     }
 
     private static final class CapturingProducer implements ActionExecutionMessageProducer {

@@ -1,20 +1,8 @@
 package io.github.actionguard.ops.api.controller;
 
-import io.github.actionguard.ops.api.model.ActionDetailView;
-import io.github.actionguard.ops.api.model.ActionListItem;
-import io.github.actionguard.ops.api.model.ActionQueryFilter;
-import io.github.actionguard.ops.api.model.ActionTimelineEventView;
-import io.github.actionguard.ops.api.model.ActionOutboxView;
-import io.github.actionguard.ops.api.model.CompensationLogView;
-import io.github.actionguard.ops.api.model.ConsumeDetailView;
-import io.github.actionguard.ops.api.model.PageResult;
-import io.github.actionguard.ops.api.model.StepDetailView;
+import io.github.actionguard.ops.api.model.*;
 import io.github.actionguard.ops.api.service.ActionQueryService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +53,11 @@ public class ActionQueryController {
     @GetMapping("/{actionInstanceId}/outboxes")
     public List<ActionOutboxView> outboxes(@PathVariable String actionInstanceId) {
         return actionQueryService.outboxes(actionInstanceId);
+    }
+
+    @GetMapping("/{actionInstanceId}/alert-outboxes")
+    public List<ActionAlertOutboxView> alertOutboxes(@PathVariable String actionInstanceId) {
+        return actionQueryService.alertOutboxes(actionInstanceId);
     }
 
     @GetMapping("/{actionInstanceId}/timeline")

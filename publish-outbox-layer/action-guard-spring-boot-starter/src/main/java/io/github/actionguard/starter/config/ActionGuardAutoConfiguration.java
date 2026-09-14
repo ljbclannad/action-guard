@@ -10,6 +10,8 @@ import io.github.actionguard.core.runtime.definition.*;
 import io.github.actionguard.core.runtime.execution.ActionExecutionCallback;
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.execution.DefaultActionExecutionCallback;
+import io.github.actionguard.core.runtime.observability.ActionAlertOutboxRecorder;
+import io.github.actionguard.core.runtime.observability.ActionAlertOutboxRecoveryService;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
 import io.github.actionguard.core.runtime.publish.DefaultActionPublisher;
 import io.github.actionguard.core.runtime.recovery.ActionOutboxRecoveryService;
@@ -19,6 +21,7 @@ import io.github.actionguard.core.runtime.retry.FixedAttemptActionRetryPolicy;
 import io.github.actionguard.starter.metrics.InMemoryActionMetricsRecorder;
 import io.github.actionguard.starter.properties.ActionGuardProperties;
 import io.github.actionguard.starter.publisher.TransactionalActionPublisher;
+import io.github.actionguard.starter.scheduler.ActionAlertOutboxRecoveryScheduler;
 import io.github.actionguard.starter.scheduler.ActionOutboxRecoveryScheduler;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -200,12 +203,45 @@ public class ActionGuardAutoConfiguration {
     }
 
     @Bean
+    public ActionAlertOutboxRecorder actionAlertOutboxRecorder(
+            ActionAlertOutboxRepository actionAlertOutboxRepository,
+            Clock clock
+    ) {
+        return new ActionAlertOutboxRecorder(actionAlertOutboxRepository, clock);
+    }
+
+    @Bean
     public ActionObservabilityService actionObservabilityService(
-            Optional<ActionAlertPublisher> actionAlertPublisher,
+            ActionAlertOutboxRecorder actionAlertOutboxRecorder,
             Optional<ActionMetricsRecorder> actionMetricsRecorder,
             Clock clock) {
-        // 告警与指标都按 Optional 注入，表示可观测性是统一出口，但具体通道由外部能力模块按需补齐。
-        return new ActionObservabilityService(actionAlertPublisher, actionMetricsRecorder, clock);
+        // 告警先在业务事务内落入独立 Outbox；指标仍是可选的提交后观测通道。
+        return new ActionObservabilityService(actionAlertOutboxRecorder, actionMetricsRecorder, clock);
+    }
+
+    @Bean
+    public ActionAlertOutboxRecoveryService actionAlertOutboxRecoveryService(
+            ActionAlertOutboxRepository actionAlertOutboxRepository,
+            Optional<ActionAlertSender> actionAlertSender,
+            Clock clock,
+            ActionGuardProperties properties
+    ) {
+        return new ActionAlertOutboxRecoveryService(
+                actionAlertOutboxRepository,
+                actionAlertSender,
+                clock,
+                properties.getAlertOutbox().getMaxDeliveryAttempts(),
+                properties.getAlertOutbox().getRetryBackoff()
+        );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ActionAlertOutboxRecoveryScheduler actionAlertOutboxRecoveryScheduler(
+            ActionAlertOutboxRecoveryService actionAlertOutboxRecoveryService,
+            ActionGuardProperties properties
+    ) {
+        return new ActionAlertOutboxRecoveryScheduler(actionAlertOutboxRecoveryService, properties.getAlertOutbox());
     }
 
     @Bean

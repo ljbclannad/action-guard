@@ -3,12 +3,7 @@ package io.github.actionguard.core.runtime.observability;
 import io.github.actionguard.api.runtime.ActionAlertEvent;
 import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.api.spi.ActionMetricsRecorder;
-import io.github.actionguard.core.model.ActionInstance;
-import io.github.actionguard.core.model.ActionOutbox;
-import io.github.actionguard.core.model.ActionOutboxStatus;
-import io.github.actionguard.core.model.ActionStatus;
-import io.github.actionguard.core.model.ActionStepInstance;
-import io.github.actionguard.core.model.ActionStepStatus;
+import io.github.actionguard.core.model.*;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
 import io.github.actionguard.core.runtime.state.ActionTransitionResult;
 import org.junit.jupiter.api.Test;
@@ -29,7 +24,7 @@ class ActionObservabilityServiceTest {
     @Test
     void shouldRejectNullOptionalContainers() {
         assertThatThrownBy(() -> new ActionObservabilityService(
-                null, Optional.empty(), Clock.systemUTC()
+                (Optional<ActionAlertPublisher>) null, Optional.empty(), Clock.systemUTC()
         )).isInstanceOf(NullPointerException.class)
                 .hasMessage("actionAlertPublisher must not be null");
         assertThatThrownBy(() -> new ActionObservabilityService(

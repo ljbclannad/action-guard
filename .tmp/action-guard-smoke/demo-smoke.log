@@ -1,3 +1,4 @@
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -7,26 +8,99 @@
  =========|_|==============|___/=/_/_/_/
  :: Spring Boot ::                (v3.2.5)
 
-2026-06-28T12:12:18.340+08:00  INFO 33176 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Starting ActionGuardDemoApplication using Java 17.0.11 with PID 33176 (/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/target/classes started by lejinbo in /Users/lejinbo/LLM/action-guard/examples/action-guard-demo)
-2026-06-28T12:12:18.341+08:00  INFO 33176 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : No active profile set, falling back to 1 default profile: "default"
-2026-06-28T12:12:18.589+08:00  WARN 33176 --- [           main] o.m.s.mapper.ClassPathMapperScanner      : No MyBatis mapper was found in '[io.github.actionguard.demo]' package. Please check your configuration.
-2026-06-28T12:12:18.735+08:00  INFO 33176 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
-2026-06-28T12:12:18.740+08:00  INFO 33176 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-06-28T12:12:18.740+08:00  INFO 33176 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.20]
-2026-06-28T12:12:18.761+08:00  INFO 33176 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-06-28T12:12:18.762+08:00  INFO 33176 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 404 ms
-2026-06-28T12:12:19.085+08:00  INFO 33176 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Starting...
-2026-06-28T12:12:19.225+08:00  INFO 33176 --- [           main] com.zaxxer.hikari.pool.HikariPool        : action-guard-demo-hikari - Added connection conn1: url=jdbc:h2:file:/Users/lejinbo/.action-guard/demo-db/action_guard_demo user=SA
-2026-06-28T12:12:19.226+08:00  INFO 33176 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Start completed.
-2026-06-28T12:12:19.281+08:00  INFO 33176 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path ''
-2026-06-28T12:12:19.283+08:00  INFO 33176 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
-2026-06-28T12:12:19.305+08:00  INFO 33176 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#322ba549:0/SimpleConnection@74ce7fdf [delegate=amqp://guest@127.0.0.1:5672/, localPort=55704]
-2026-06-28T12:12:19.337+08:00  INFO 33176 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Started ActionGuardDemoApplication in 1.132 seconds (process running for 1.234)
-send sms to [13800000000] template=demo-notify
-actionName=demo-notify-success
-bizKey=order:demo-1782619939338
-status=SUCCESS
-2026-06-28T12:12:19.574+08:00  INFO 33176 --- [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Waiting for workers to finish.
-2026-06-28T12:12:20.384+08:00  INFO 33176 --- [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Successfully waited for workers to finish.
-2026-06-28T12:12:20.405+08:00  INFO 33176 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown initiated...
-2026-06-28T12:12:20.620+08:00  INFO 33176 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown completed.
+2026-09-11T17:39:46.061+08:00  INFO 97263 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Starting ActionGuardDemoApplication using Java 17.0.11 with PID 97263 (/Users/lejinbo/LLM/action-guard/examples/action-guard-demo/target/classes started by lejinbo in /Users/lejinbo/LLM/action-guard)
+2026-09-11T17:39:46.063+08:00  INFO 97263 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : The following 1 profile is active: "h2"
+2026-09-11T17:39:46.548+08:00  INFO 97263 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-09-11T17:39:46.554+08:00  INFO 97263 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-11T17:39:46.554+08:00  INFO 97263 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.20]
+2026-09-11T17:39:46.587+08:00  INFO 97263 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-09-11T17:39:46.588+08:00  INFO 97263 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 507 ms
+Standard Commons Logging discovery in action with spring-jcl: please remove commons-logging.jar from classpath in order to avoid potential conflicts
+2026-09-11T17:39:46.719+08:00  INFO 97263 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Starting...
+2026-09-11T17:39:46.876+08:00  INFO 97263 --- [           main] com.zaxxer.hikari.pool.HikariPool        : action-guard-demo-hikari - Added connection conn1: url=jdbc:h2:file:/var/folders/79/pxmq9t4178b4lzkxm9hhdxb40000gn/T/tmp.H67vxoHZiF/action_guard_demo user=SA
+2026-09-11T17:39:46.877+08:00  INFO 97263 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Start completed.
+2026-09-11T17:39:47.160+08:00  INFO 97263 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path ''
+2026-09-11T17:39:47.161+08:00  INFO 97263 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:47.163+08:00  INFO 97263 --- [           main] o.s.a.r.l.SimpleMessageListenerContainer : Broker not available; cannot force queue declarations during start: java.net.ConnectException: Connection refused
+2026-09-11T17:39:47.165+08:00  INFO 97263 --- [ntContainer#0-1] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:47.165+08:00 ERROR 97263 --- [ntContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer : Failed to check/redeclare auto-delete queue(s).
+
+org.springframework.amqp.AmqpConnectException: java.net.ConnectException: Connection refused
+	at org.springframework.amqp.rabbit.support.RabbitExceptionTranslator.convertRabbitAccessException(RabbitExceptionTranslator.java:61) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.createBareConnection(AbstractConnectionFactory.java:622) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.connection.CachingConnectionFactory.createConnection(CachingConnectionFactory.java:727) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.connection.ConnectionFactoryUtils.createConnection(ConnectionFactoryUtils.java:257) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.core.RabbitTemplate.doExecute(RabbitTemplate.java:2249) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.core.RabbitTemplate.execute(RabbitTemplate.java:2222) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.core.RabbitTemplate.execute(RabbitTemplate.java:2202) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.core.RabbitAdmin.getQueueInfo(RabbitAdmin.java:467) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.core.RabbitAdmin.getQueueProperties(RabbitAdmin.java:451) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer.attemptDeclarations(AbstractMessageListenerContainer.java:1960) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.listener.AbstractMessageListenerContainer.redeclareElementsIfNecessary(AbstractMessageListenerContainer.java:1924) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer$AsyncMessageProcessingConsumer.initialize(SimpleMessageListenerContainer.java:1478) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer$AsyncMessageProcessingConsumer.run(SimpleMessageListenerContainer.java:1320) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at java.base/java.lang.Thread.run(Thread.java:842) ~[na:na]
+Caused by: java.net.ConnectException: Connection refused
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:672) ~[na:na]
+	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:554) ~[na:na]
+	at java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:602) ~[na:na]
+	at java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:327) ~[na:na]
+	at java.base/java.net.Socket.connect(Socket.java:633) ~[na:na]
+	at com.rabbitmq.client.impl.SocketFrameHandlerFactory.create(SocketFrameHandlerFactory.java:61) ~[amqp-client-5.19.0.jar:5.19.0]
+	at com.rabbitmq.client.ConnectionFactory.newConnection(ConnectionFactory.java:1249) ~[amqp-client-5.19.0.jar:5.19.0]
+	at com.rabbitmq.client.ConnectionFactory.newConnection(ConnectionFactory.java:1198) ~[amqp-client-5.19.0.jar:5.19.0]
+	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.connectAddresses(AbstractConnectionFactory.java:668) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.connect(AbstractConnectionFactory.java:637) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	at org.springframework.amqp.rabbit.connection.AbstractConnectionFactory.createBareConnection(AbstractConnectionFactory.java:584) ~[spring-rabbit-3.1.4.jar:3.1.4]
+	... 12 common frames omitted
+
+2026-09-11T17:39:47.167+08:00  INFO 97263 --- [ntContainer#0-1] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:47.171+08:00  INFO 97263 --- [           main] i.g.a.demo.ActionGuardDemoApplication    : Started ActionGuardDemoApplication in 1.302 seconds (process running for 1.451)
+2026-09-11T17:39:47.197+08:00  INFO 97263 --- [           main] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:52.261+08:00  WARN 97263 --- [ntContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer : Consumer raised exception, processing can restart if the connection factory supports it. Exception summary: org.springframework.amqp.AmqpConnectException: java.net.ConnectException: Connection refused
+2026-09-11T17:39:52.265+08:00  INFO 97263 --- [ntContainer#0-1] o.s.a.r.l.SimpleMessageListenerContainer : Restarting Consumer@5d3b6585: tags=[[]], channel=null, acknowledgeMode=MANUAL local queue size=0
+2026-09-11T17:39:52.266+08:00  INFO 97263 --- [ntContainer#0-2] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:52.267+08:00 ERROR 97263 --- [ntContainer#0-2] o.s.a.r.l.SimpleMessageListenerContainer : Failed to check/redeclare auto-delete queue(s).
+2026-09-11T17:39:52.268+08:00  INFO 97263 --- [ntContainer#0-2] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:57.194+08:00  INFO 97263 --- [outbox-recovery] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [localhost:5672]
+2026-09-11T17:39:57.305+08:00  INFO 97263 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-09-11T17:39:57.317+08:00 ERROR 97263 --- [           main] o.s.boot.SpringApplication               : Application run failed
+
+java.lang.IllegalStateException: Timed out waiting for action success, currentStatus=NEW
+	at io.github.actionguard.demo.runner.SampleActionFlowRunner.awaitSuccess(SampleActionFlowRunner.java:82) ~[classes/:na]
+	at io.github.actionguard.demo.runner.SampleActionFlowRunner.run(SampleActionFlowRunner.java:60) ~[classes/:na]
+	at org.springframework.boot.SpringApplication.lambda$callRunner$4(SpringApplication.java:786) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.util.function.ThrowingConsumer$1.acceptWithException(ThrowingConsumer.java:83) ~[spring-core-6.1.6.jar:6.1.6]
+	at org.springframework.util.function.ThrowingConsumer.accept(ThrowingConsumer.java:60) ~[spring-core-6.1.6.jar:6.1.6]
+	at org.springframework.util.function.ThrowingConsumer$1.accept(ThrowingConsumer.java:88) ~[spring-core-6.1.6.jar:6.1.6]
+	at org.springframework.boot.SpringApplication.callRunner(SpringApplication.java:798) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.callRunner(SpringApplication.java:786) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.lambda$callRunners$3(SpringApplication.java:774) ~[spring-boot-3.2.5.jar:3.2.5]
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:183) ~[na:na]
+	at java.base/java.util.stream.SortedOps$SizedRefSortingSink.end(SortedOps.java:357) ~[na:na]
+	at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:510) ~[na:na]
+	at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499) ~[na:na]
+	at java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:150) ~[na:na]
+	at java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:173) ~[na:na]
+	at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:234) ~[na:na]
+	at java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:596) ~[na:na]
+	at org.springframework.boot.SpringApplication.callRunners(SpringApplication.java:774) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:341) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1354) ~[spring-boot-3.2.5.jar:3.2.5]
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1343) ~[spring-boot-3.2.5.jar:3.2.5]
+	at io.github.actionguard.demo.ActionGuardDemoApplication.main(ActionGuardDemoApplication.java:21) ~[classes/:na]
+
+2026-09-11T17:39:57.318+08:00  INFO 97263 --- [ntContainer#0-3] o.s.a.r.l.SimpleMessageListenerContainer : Waiting for workers to finish.
+2026-09-11T17:39:57.318+08:00  INFO 97263 --- [ntContainer#0-3] o.s.a.r.l.SimpleMessageListenerContainer : Successfully waited for workers to finish.
+2026-09-11T17:39:57.324+08:00  INFO 97263 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown initiated...
+2026-09-11T17:39:57.335+08:00  INFO 97263 --- [           main] com.zaxxer.hikari.HikariDataSource       : action-guard-demo-hikari - Shutdown completed.
+[[1;31mERROR[m] Failed to execute goal [32morg.springframework.boot:spring-boot-maven-plugin:3.2.5:run[m [1m(default-cli)[m on project [36maction-guard-demo[m: [1;31mProcess terminated with exit code: 1[m -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

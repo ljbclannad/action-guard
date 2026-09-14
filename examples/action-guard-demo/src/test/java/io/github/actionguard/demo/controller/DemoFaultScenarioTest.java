@@ -83,7 +83,9 @@ class DemoFaultScenarioTest {
         assertSteps(id, "FAILED", 1);
         mvc.perform(get("/api/actions/{id}", id)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RETRYING"));
-        mvc.perform(post("/api/actions/{id}/skip", id).header("X-Action-Guard-Operator", "demo-operator"))
+        mvc.perform(post("/api/actions/{id}/skip", id)
+                        .contentType("application/json")
+                        .content("{\"reason\":\"演示人工跳过\"}"))
                 .andExpect(status().isOk());
         execute(id);
         assertSteps(id, "SUCCESS", 1);
@@ -92,7 +94,8 @@ class DemoFaultScenarioTest {
         mvc.perform(get("/api/audit-logs").param("actionInstanceId", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].operationType").value("SKIP"))
-                .andExpect(jsonPath("$.items[0].operator").value("demo-operator"));
+                .andExpect(jsonPath("$.items[0].operator").value("fault-demo-operator"))
+                .andExpect(jsonPath("$.items[0].requestPayloadJson").value(org.hamcrest.Matchers.containsString("演示人工跳过")));
     }
 
     @Test

@@ -1,11 +1,6 @@
 package io.github.actionguard.ops.api.service;
 
-import io.github.actionguard.core.model.ActionInstance;
-import io.github.actionguard.core.model.ActionOutbox;
-import io.github.actionguard.core.model.ActionOutboxStatus;
-import io.github.actionguard.core.model.ActionStepInstance;
-import io.github.actionguard.core.model.ActionStepStatus;
-import io.github.actionguard.core.model.ActionStatus;
+import io.github.actionguard.core.model.*;
 import io.github.actionguard.core.repository.ActionInstanceRepository;
 import io.github.actionguard.core.repository.ActionOutboxRepository;
 import io.github.actionguard.core.repository.ActionStepInstanceRepository;
@@ -14,18 +9,14 @@ import io.github.actionguard.core.runtime.compensation.ActionCompensationExecuto
 import io.github.actionguard.core.runtime.execution.ActionExecutionMessageProducer;
 import io.github.actionguard.core.runtime.execution.ActionOutboxDispatcher;
 import io.github.actionguard.core.runtime.observability.ActionObservabilityService;
-import io.github.actionguard.core.runtime.state.ActionTransitionContext;
-import io.github.actionguard.core.runtime.state.ActionTransitionExecution;
-import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
-import io.github.actionguard.core.runtime.state.ActionTransitionMetadata;
-import io.github.actionguard.core.runtime.state.ActionTransitionService;
+import io.github.actionguard.core.runtime.state.*;
 import io.github.actionguard.ops.api.support.ActionCommandValidator;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.Instant;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -124,7 +115,8 @@ public class ActionCommandService {
     }
 
     @Transactional
-    public void retry(String actionInstanceId, String operator) {
+    public void retry(String actionInstanceId, String operator, String reason) {
+        requireReason(reason);
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
                     .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
@@ -133,7 +125,7 @@ public class ActionCommandService {
             if (actionInstance.status() == ActionStatus.RETRYING
                     && (outbox.status() == ActionOutboxStatus.NEW
                     || outbox.status() == ActionOutboxStatus.CLAIMED)) {
-                auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry already scheduled");
+                auditService.recordCommand(actionInstanceId, "RETRY", operator, reason, "SUCCESS", "retry already scheduled");
                 actionObservabilityService.governanceCommand("RETRY", "SUCCESS");
                 return;
             }
@@ -143,22 +135,23 @@ public class ActionCommandService {
                 validator.validateRetry(actionInstance.status());
             }
             publishOutboxAfterCommit(requeueOutbox(outbox));
-            auditService.record(actionInstanceId, "RETRY", operator, "{}", "SUCCESS", "retry dispatched");
+            auditService.recordCommand(actionInstanceId, "RETRY", operator, reason, "SUCCESS", "retry dispatched");
             actionObservabilityService.governanceCommand("RETRY", "SUCCESS");
         } catch (RuntimeException ex) {
-            auditService.record(actionInstanceId, "RETRY", operator, "{}", "FAILED", ex.getMessage());
+            auditService.recordCommand(actionInstanceId, "RETRY", operator, reason, "FAILED", ex.getMessage());
             actionObservabilityService.governanceCommand("RETRY", "FAILED");
             throw ex;
         }
     }
 
     @Transactional
-    public void cancel(String actionInstanceId, String operator) {
+    public void cancel(String actionInstanceId, String operator, String reason) {
+        requireReason(reason);
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
                     .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
             if (actionInstance.status() == ActionStatus.IGNORED) {
-                auditService.record(actionInstanceId, "CANCEL", operator, "{}", "SUCCESS", "action already ignored");
+                auditService.recordCommand(actionInstanceId, "CANCEL", operator, reason, "SUCCESS", "action already ignored");
                 actionObservabilityService.governanceCommand("CANCEL", "SUCCESS");
                 return;
             }
@@ -185,20 +178,22 @@ public class ActionCommandService {
                     actionInstanceId,
                     "CANCEL",
                     operator,
+                    reason,
                     transitionExecution.transitionResult(),
                     "SUCCESS",
                     "action ignored"
             );
             actionObservabilityService.governanceCommand("CANCEL", "SUCCESS");
         } catch (RuntimeException ex) {
-            auditService.record(actionInstanceId, "CANCEL", operator, "{}", "FAILED", ex.getMessage());
+            auditService.recordCommand(actionInstanceId, "CANCEL", operator, reason, "FAILED", ex.getMessage());
             actionObservabilityService.governanceCommand("CANCEL", "FAILED");
             throw ex;
         }
     }
 
     @Transactional
-    public void skip(String actionInstanceId, String operator) {
+    public void skip(String actionInstanceId, String operator, String reason) {
+        requireReason(reason);
         try {
             ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
                     .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
@@ -252,39 +247,41 @@ public class ActionCommandService {
                     actionInstanceId,
                     "SKIP",
                     operator,
+                    reason,
                     transitionExecution.transitionResult(),
                     "SUCCESS",
                     "current step skipped"
             );
             actionObservabilityService.governanceCommand("SKIP", "SUCCESS");
         } catch (RuntimeException ex) {
-            auditService.record(actionInstanceId, "SKIP", operator, "{}", "FAILED", ex.getMessage());
+            auditService.recordCommand(actionInstanceId, "SKIP", operator, reason, "FAILED", ex.getMessage());
             actionObservabilityService.governanceCommand("SKIP", "FAILED");
             throw ex;
         }
     }
 
     @Transactional
-    public void compensate(String actionInstanceId, String operator) {
+    public void compensate(String actionInstanceId, String operator, String reason) {
+        requireReason(reason);
         ActionInstance actionInstance = actionInstanceRepository.findById(actionInstanceId)
                 .orElseThrow(() -> new IllegalArgumentException("Action not found: " + actionInstanceId));
         if (actionInstance.status() == ActionStatus.COMPENSATING) {
-            auditService.record(actionInstanceId, "COMPENSATE", operator, "{}", "SUCCESS", "compensation already in progress");
+            auditService.recordCommand(actionInstanceId, "COMPENSATE", operator, reason, "SUCCESS", "compensation already in progress");
             actionObservabilityService.governanceCommand("COMPENSATE", "SUCCESS");
             return;
         }
         if (actionInstance.status() == ActionStatus.COMPENSATED) {
-            auditService.record(actionInstanceId, "COMPENSATE", operator, "{}", "SUCCESS", "compensation already completed");
+            auditService.recordCommand(actionInstanceId, "COMPENSATE", operator, reason, "SUCCESS", "compensation already completed");
             actionObservabilityService.governanceCommand("COMPENSATE", "SUCCESS");
             return;
         }
         validator.validateCompensate(actionInstance.status());
         try {
             actionCompensationExecutor.compensate(actionInstanceId);
-            auditService.record(actionInstanceId, "COMPENSATE", operator, "{}", "SUCCESS", "compensation completed");
+            auditService.recordCommand(actionInstanceId, "COMPENSATE", operator, reason, "SUCCESS", "compensation completed");
             actionObservabilityService.governanceCommand("COMPENSATE", "SUCCESS");
         } catch (RuntimeException ex) {
-            auditService.record(actionInstanceId, "COMPENSATE", operator, "{}", "FAILED", ex.getMessage());
+            auditService.recordCommand(actionInstanceId, "COMPENSATE", operator, reason, "FAILED", ex.getMessage());
             actionObservabilityService.governanceCommand("COMPENSATE", "FAILED");
             throw ex;
         }
@@ -345,6 +342,12 @@ public class ActionCommandService {
         if (status != ActionStatus.NEW && status != ActionStatus.DISPATCHING
                 && status != ActionStatus.RETRYING && status != ActionStatus.FAILED) {
             throw new IllegalStateException("Retry is not allowed for action status: " + status);
+        }
+    }
+
+    private void requireReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason must not be null or blank");
         }
     }
 }

@@ -187,6 +187,22 @@ Starter 将可用的 `PlatformTransactionManager` 注入默认执行回调。Ste
 - `RETRYING`
 - `COMPENSATING`
 
+## 告警 Outbox 配置项
+
+告警通过独立 `action_alert_outbox` 持久化，并使用与执行 Outbox 隔离的 `NEW → CLAIMED → DONE / DEAD` 状态机。是否配置 webhook 不影响告警记录；未提供 `ActionAlertSender` 时，记录保留为 `NEW`，可通过治理接口查询，之后接入
+sender 并启动调度后再恢复投递。
+
+| 配置项                                            | 类型       | 默认值 | 作用                                             |
+|---------------------------------------------------|------------|--------|--------------------------------------------------|
+| `action.guard.alert-outbox.enabled`               | `boolean`  | `true` | 是否启动告警 Outbox 恢复调度；不会关闭事务内入队 |
+| `action.guard.alert-outbox.batch-size`            | `int`      | `100`  | 每轮最多扫描的到期或超时抢占记录数               |
+| `action.guard.alert-outbox.fixed-delay`           | `Duration` | `5s`   | 告警恢复调度的固定间隔                           |
+| `action.guard.alert-outbox.claim-timeout`         | `Duration` | `30s`  | `CLAIMED` 告警超过该时长后允许重新抢占           |
+| `action.guard.alert-outbox.max-delivery-attempts` | `int`      | `10`   | sender 连续失败达到该次数后转入 `DEAD`           |
+| `action.guard.alert-outbox.retry-backoff`         | `Duration` | `5s`   | sender 失败后再次投递前的退避时间                |
+
+`DONE` 仅表示 `ActionAlertSender` 已成功执行，不代表下游人员已阅读。sender 成功但 `DONE` 状态落库失败时，为避免丢失记录，后续恢复会再次发送，因此接收端必须按 `eventId` 去重。
+
 ## 相关外部配置
 
 虽然不在 starter 自己的 `ActionGuardProperties` 里，但实际接入时通常需要同时配置：

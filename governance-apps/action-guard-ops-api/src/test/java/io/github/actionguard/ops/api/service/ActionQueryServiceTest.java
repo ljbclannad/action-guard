@@ -1,16 +1,10 @@
 package io.github.actionguard.ops.api.service;
 
-import io.github.actionguard.core.model.ActionConsumeStatus;
-import io.github.actionguard.core.model.ActionStatus;
-import io.github.actionguard.core.model.ActionStepStatus;
-import io.github.actionguard.core.model.ActionTransitionLog;
+import io.github.actionguard.core.model.*;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
 import io.github.actionguard.core.runtime.state.ActionTransitionEvent;
-import io.github.actionguard.ops.api.model.ActionDetailView;
-import io.github.actionguard.ops.api.model.ActionOutboxView;
-import io.github.actionguard.ops.api.model.CompensationLogView;
-import io.github.actionguard.ops.api.model.ConsumeDetailView;
-import io.github.actionguard.ops.api.model.StepDetailView;
+import io.github.actionguard.ops.api.model.*;
+import io.github.actionguard.ops.api.repository.ActionAlertOutboxQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
@@ -174,5 +168,26 @@ class ActionQueryServiceTest {
         given(actionOutboxQueryRepository.findByActionInstanceId("act-1")).willReturn(List.of(expected));
 
         assertThat(service.outboxes("act-1")).containsExactly(expected);
+    }
+
+    @Test
+    void shouldReturnAlertOutboxDiagnosticsFromQueryRepository() {
+        ActionOpsQueryRepository queryRepository = mock(ActionOpsQueryRepository.class);
+        ActionOutboxQueryRepository actionOutboxQueryRepository = mock(ActionOutboxQueryRepository.class);
+        ActionAlertOutboxQueryRepository actionAlertOutboxQueryRepository = mock(ActionAlertOutboxQueryRepository.class);
+        ActionCompensationLogQueryRepository compensationRepository = mock(ActionCompensationLogQueryRepository.class);
+        ActionTransitionLogRepository transitionLogRepository = mock(ActionTransitionLogRepository.class);
+        ActionQueryService service = new ActionQueryService(
+                queryRepository, actionOutboxQueryRepository, actionAlertOutboxQueryRepository,
+                compensationRepository, transitionLogRepository);
+        ActionAlertOutboxView expected = new ActionAlertOutboxView(
+                "alert-1", "event-1", "RETRIES_EXHAUSTED", "ERROR", "order-flow", "act-1", "notify", "SMS",
+                ActionAlertOutboxStatus.NEW, Instant.parse("2026-06-26T12:00:00Z"), 3, "token=[REDACTED]",
+                Instant.parse("2026-06-26T11:00:00Z"), Instant.parse("2026-06-26T11:00:00Z"),
+                Instant.parse("2026-06-26T12:00:00Z"), 4
+        );
+        given(actionAlertOutboxQueryRepository.findByActionInstanceId("act-1")).willReturn(List.of(expected));
+
+        assertThat(service.alertOutboxes("act-1")).containsExactly(expected);
     }
 }

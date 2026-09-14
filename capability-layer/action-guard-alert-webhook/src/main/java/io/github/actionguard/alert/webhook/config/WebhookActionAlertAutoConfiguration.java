@@ -1,8 +1,8 @@
 package io.github.actionguard.alert.webhook.config;
 
-import io.github.actionguard.api.spi.ActionAlertPublisher;
 import io.github.actionguard.alert.webhook.properties.ActionGuardWebhookAlertProperties;
-import io.github.actionguard.alert.webhook.publisher.WebhookActionAlertPublisher;
+import io.github.actionguard.alert.webhook.publisher.WebhookActionAlertSender;
+import io.github.actionguard.api.spi.ActionAlertSender;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,11 +22,11 @@ public class WebhookActionAlertAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(ActionAlertPublisher.class)
-    ActionAlertPublisher actionAlertPublisher(
+    @ConditionalOnMissingBean(ActionAlertSender.class)
+    ActionAlertSender actionAlertSender(
             RestClient actionGuardAlertRestClient,
             ActionGuardWebhookAlertProperties properties
     ) {
-        return new WebhookActionAlertPublisher(actionGuardAlertRestClient, properties.getUrl());
+        return new WebhookActionAlertSender(actionGuardAlertRestClient, properties.getUrl());
     }
 }

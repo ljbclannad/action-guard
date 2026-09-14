@@ -155,7 +155,8 @@ mvn -f examples/action-guard-demo/pom.xml spring-boot:run \
 
 该 profile 关闭启动时自动发布，加载 `fault-actions/*.yml`，并启用现有 ops-api 的查询、命令和审计接口。默认成功示例的 `/api/publish` 在此 profile 下关闭；`GET /api/actions/{id}` 改为返回治理详情，其中 `status` 仍在顶层。
 
-治理 API 当前没有鉴权，因此此 profile 默认只监听 `127.0.0.1`，仅用于本地演示。默认数据库位置和 RabbitMQ 拓扑沿用前文配置；不要同时运行消费同一队列但加载不同定义的默认 demo 和故障 demo。
+治理 API 由 `fault-demo` profile 注册固定的 `fault-demo-operator` 演示身份及全权限，仅用于本地演示；该身份实现不能复制到生产环境。profile 仍默认只监听 `127.0.0.1`。默认数据库位置和 RabbitMQ
+拓扑沿用前文配置；不要同时运行消费同一队列但加载不同定义的默认 demo 和故障 demo。
 
 两个场景只模拟 Handler 结果，不调用真实业务下游。`fail-once` 根据持久化步骤的 `attemptCount` 判断首次失败，进程重启不会重置计数；这是故障注入实现，不是业务 Handler 幂等性的实现范例。
 
@@ -188,7 +189,8 @@ curl -sS -X POST http://localhost:8080/api/demo/scenarios/manual-skip
 
 ```bash
 curl -sS -X POST "http://localhost:8080/api/actions/$ACTION_ID/skip" \
-  -H 'X-Action-Guard-Operator: demo-operator'
+  -H 'Content-Type: application/json' \
+  -d '{"reason":"下游持续不可用，人工确认可跳过"}'
 curl -sS "http://localhost:8080/api/actions/$ACTION_ID"
 curl -sS "http://localhost:8080/api/actions/$ACTION_ID/steps"
 curl -sS "http://localhost:8080/api/audit-logs?actionInstanceId=$ACTION_ID"
@@ -196,7 +198,7 @@ curl -sS "http://localhost:8080/api/audit-logs?actionInstanceId=$ACTION_ID"
 
 第二步持续失败，配置最多 10 次重试、每次间隔 60 秒，为人工操作留出时间。必须在 `RETRYING` 时跳过；若已耗尽重试进入 `FAILED`，当前治理规则不允许跳过，请重新发布场景。
 
-验收：Action 变为 `SUCCESS`，第一步尝试次数仍为 1；被跳过步骤标记为 `SUCCESS`，尝试次数不会因跳过增加，审计中包含 `SKIP` 和 `demo-operator`。这里的成功表示人工接受省略可选副作用，不能理解为下游调用真实成功。
+验收：Action 变为 `SUCCESS`，第一步尝试次数仍为 1；被跳过步骤标记为 `SUCCESS`，尝试次数不会因跳过增加，审计中包含 `SKIP`、`fault-demo-operator` 和提交的 `reason`。这里的成功表示人工接受省略可选副作用，不能理解为下游调用真实成功。
 
 ### 自动化验证与边界
 

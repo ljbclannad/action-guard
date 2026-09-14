@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxMapper">
+
+    <sql id="columns">
+        id, event_id as eventId, dedupe_key as dedupeKey, type, level, title, message,
+        action_name as actionName, action_instance_id as actionInstanceId, step_name as stepName,
+        step_type as stepType, occurred_at as occurredAt, details_json as detailsJson, status,
+        available_at as availableAt, delivery_attempt_count as deliveryAttemptCount,
+        last_error_message as lastErrorMessage, version, created_at as createdAt, updated_at as updatedAt
+    </sql>
+
+    <select id="selectById" resultType="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxRow">
+        select
+        <include refid="columns"/>
+        from action_alert_outbox where id = #{id}
+    </select>
+
+    <select id="selectByDedupeKey" resultType="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxRow">
+        select
+        <include refid="columns"/>
+        from action_alert_outbox where dedupe_key = #{dedupeKey}
+    </select>
+
+    <insert id="insert" parameterType="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxRow">
+        insert into action_alert_outbox (
+        id, event_id, dedupe_key, type, level, title, message, action_name, action_instance_id,
+        step_name, step_type, occurred_at, details_json, status, available_at, delivery_attempt_count,
+        last_error_message, version, created_at, updated_at
+        ) values (
+        #{id}, #{eventId}, #{dedupeKey}, #{type}, #{level}, #{title}, #{message}, #{actionName}, #{actionInstanceId},
+        #{stepName}, #{stepType}, #{occurredAt}, #{detailsJson}, #{status}, #{availableAt}, #{deliveryAttemptCount},
+        #{lastErrorMessage}, #{version}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOptimistically" parameterType="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxRow">
+        update action_alert_outbox
+        set status = #{status}, available_at = #{availableAt}, delivery_attempt_count = #{deliveryAttemptCount},
+        last_error_message = #{lastErrorMessage}, version = version + 1, updated_at = #{updatedAt}
+        where id = #{id} and version = #{version}
+    </update>
+
+    <select id="selectRecoverable" resultType="io.github.actionguard.store.mysql.mapper.ActionAlertOutboxRow">
+        select
+        <include refid="columns"/>
+        from action_alert_outbox
+        where (status = 'NEW' and available_at &lt;= #{availableBeforeOrAt})
+        or (status = 'CLAIMED' and updated_at &lt;= #{claimedBeforeOrAt})
+        order by available_at asc, created_at asc
+        limit #{limit}
+    </select>
+</mapper>

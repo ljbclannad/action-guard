@@ -1,16 +1,9 @@
 package io.github.actionguard.ops.api.service;
 
-import io.github.actionguard.ops.api.model.ActionDetailView;
-import io.github.actionguard.ops.api.model.ActionListItem;
-import io.github.actionguard.ops.api.model.ActionQueryFilter;
-import io.github.actionguard.ops.api.model.ActionTimelineEventView;
-import io.github.actionguard.ops.api.model.ActionOutboxView;
-import io.github.actionguard.ops.api.model.CompensationLogView;
-import io.github.actionguard.ops.api.model.ConsumeDetailView;
-import io.github.actionguard.ops.api.model.PageResult;
-import io.github.actionguard.ops.api.model.StepDetailView;
 import io.github.actionguard.core.model.ActionTransitionLog;
 import io.github.actionguard.core.repository.ActionTransitionLogRepository;
+import io.github.actionguard.ops.api.model.*;
+import io.github.actionguard.ops.api.repository.ActionAlertOutboxQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionCompensationLogQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOpsQueryRepository;
 import io.github.actionguard.ops.api.repository.ActionOutboxQueryRepository;
@@ -23,17 +16,33 @@ public class ActionQueryService {
 
     private final ActionOpsQueryRepository repository;
     private final ActionOutboxQueryRepository actionOutboxQueryRepository;
+    private final ActionAlertOutboxQueryRepository actionAlertOutboxQueryRepository;
     private final ActionCompensationLogQueryRepository compensationLogQueryRepository;
     private final ActionTransitionLogRepository actionTransitionLogRepository;
 
+    /**
+     * 保持既有 Java 组装方式；未提供新查询仓储时告警诊断返回空列表。
+     */
     public ActionQueryService(
             ActionOpsQueryRepository repository,
             ActionOutboxQueryRepository actionOutboxQueryRepository,
             ActionCompensationLogQueryRepository compensationLogQueryRepository,
             ActionTransitionLogRepository actionTransitionLogRepository
     ) {
+        this(repository, actionOutboxQueryRepository, actionInstanceId -> List.of(), compensationLogQueryRepository,
+                actionTransitionLogRepository);
+    }
+
+    public ActionQueryService(
+            ActionOpsQueryRepository repository,
+            ActionOutboxQueryRepository actionOutboxQueryRepository,
+            ActionAlertOutboxQueryRepository actionAlertOutboxQueryRepository,
+            ActionCompensationLogQueryRepository compensationLogQueryRepository,
+            ActionTransitionLogRepository actionTransitionLogRepository
+    ) {
         this.repository = repository;
         this.actionOutboxQueryRepository = actionOutboxQueryRepository;
+        this.actionAlertOutboxQueryRepository = actionAlertOutboxQueryRepository;
         this.compensationLogQueryRepository = compensationLogQueryRepository;
         this.actionTransitionLogRepository = actionTransitionLogRepository;
     }
@@ -76,6 +85,10 @@ public class ActionQueryService {
 
     public List<ActionOutboxView> outboxes(String actionInstanceId) {
         return actionOutboxQueryRepository.findByActionInstanceId(actionInstanceId);
+    }
+
+    public List<ActionAlertOutboxView> alertOutboxes(String actionInstanceId) {
+        return actionAlertOutboxQueryRepository.findByActionInstanceId(actionInstanceId);
     }
 
     public List<ActionTimelineEventView> timeline(String actionInstanceId) {

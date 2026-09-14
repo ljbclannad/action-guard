@@ -1,54 +1,63 @@
 package io.github.actionguard.ops.api.controller;
 
+import io.github.actionguard.ops.api.model.ActionCommandRequest;
+import io.github.actionguard.ops.api.security.ActionOpsPrincipal;
+import io.github.actionguard.ops.api.security.ActionOpsRequestAttributes;
 import io.github.actionguard.ops.api.service.ActionCommandService;
-import io.github.actionguard.ops.api.support.OperatorResolver;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/actions")
 public class ActionCommandController {
 
     private final ActionCommandService actionCommandService;
-    private final OperatorResolver operatorResolver;
 
-    public ActionCommandController(ActionCommandService actionCommandService, OperatorResolver operatorResolver) {
+    public ActionCommandController(ActionCommandService actionCommandService) {
         this.actionCommandService = actionCommandService;
-        this.operatorResolver = operatorResolver;
     }
 
     @PostMapping("/{actionInstanceId}/retry")
     public void retry(
             @PathVariable String actionInstanceId,
-            @RequestHeader(value = "X-Action-Guard-Operator", required = false) String operator
+            @RequestAttribute(ActionOpsRequestAttributes.PRINCIPAL) ActionOpsPrincipal principal,
+            @RequestBody ActionCommandRequest request
     ) {
-        actionCommandService.retry(actionInstanceId, operatorResolver.resolve(operator));
+        actionCommandService.retry(actionInstanceId, principal.operatorId(), requiredReason(request));
     }
 
     @PostMapping("/{actionInstanceId}/cancel")
     public void cancel(
             @PathVariable String actionInstanceId,
-            @RequestHeader(value = "X-Action-Guard-Operator", required = false) String operator
+            @RequestAttribute(ActionOpsRequestAttributes.PRINCIPAL) ActionOpsPrincipal principal,
+            @RequestBody ActionCommandRequest request
     ) {
-        actionCommandService.cancel(actionInstanceId, operatorResolver.resolve(operator));
+        actionCommandService.cancel(actionInstanceId, principal.operatorId(), requiredReason(request));
     }
 
     @PostMapping("/{actionInstanceId}/skip")
     public void skip(
             @PathVariable String actionInstanceId,
-            @RequestHeader(value = "X-Action-Guard-Operator", required = false) String operator
+            @RequestAttribute(ActionOpsRequestAttributes.PRINCIPAL) ActionOpsPrincipal principal,
+            @RequestBody ActionCommandRequest request
     ) {
-        actionCommandService.skip(actionInstanceId, operatorResolver.resolve(operator));
+        actionCommandService.skip(actionInstanceId, principal.operatorId(), requiredReason(request));
     }
 
     @PostMapping("/{actionInstanceId}/compensate")
     public void compensate(
             @PathVariable String actionInstanceId,
-            @RequestHeader(value = "X-Action-Guard-Operator", required = false) String operator
+            @RequestAttribute(ActionOpsRequestAttributes.PRINCIPAL) ActionOpsPrincipal principal,
+            @RequestBody ActionCommandRequest request
     ) {
-        actionCommandService.compensate(actionInstanceId, operatorResolver.resolve(operator));
+        actionCommandService.compensate(actionInstanceId, principal.operatorId(), requiredReason(request));
+    }
+
+    private String requiredReason(ActionCommandRequest request) {
+        if (request == null || request.reason() == null || request.reason().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason 不能为空");
+        }
+        return request.reason();
     }
 }
